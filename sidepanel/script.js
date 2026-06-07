@@ -342,48 +342,36 @@ async function extractDirect(file) {
 
     video.src = blobUrl;
     await new Promise((resolve, reject) => {
-      let resolved = false;
-      const done = () => {
-        if (resolved) return;
-        if (video.duration && isFinite(video.duration) && video.duration > 0) {
-          resolved = true;
-          resolve();
-        }
-      };
-      video.addEventListener('loadedmetadata', done, { once: true });
-      video.addEventListener('durationchange', done, { once: true });
-      video.addEventListener('canplay', done, { once: true });
-      video.addEventListener('error', () => {
-        if (!resolved) reject(new Error('Cannot load this file'));
-      }, { once: true });
-      setTimeout(() => {
-        if (!resolved && video.duration && isFinite(video.duration) && video.duration > 0) {
-          resolved = true;
-          resolve();
-        } else if (!resolved) {
-          reject(new Error('Timed out waiting for media duration'));
-        }
-      }, 10000);
+      video.addEventListener('loadedmetadata', resolve, { once: true });
+      video.addEventListener('error', () => reject(new Error('Cannot load this file')), { once: true });
     });
 
-    const duration = video.duration;
-    if (!duration || !isFinite(duration)) {
-      throw new Error('Cannot determine media duration');
-    }
-
-    const stream = video.captureStream();
+    // Use createMediaElementSource to tap directly into the decoded audio pipeline,
+    // avoiding captureStream() which may not capture audio for all format/codecs.
     audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-    const sourceNode = audioCtx.createMediaStreamSource(stream);
+    const sourceNode = audioCtx.createMediaElementSource(video);
     const destNode = audioCtx.createMediaStreamDestination();
     sourceNode.connect(destNode);
 
     const SEG = 15;
     await video.play();
 
-    for (let t = 0; t < duration && isExtracting; t += SEG) {
-      const dur = Math.min(SEG, duration - t);
+    // Monitor video progress via timeupdate to detect when playback truly stalls.
+    let currentTimeAtEnd = 0;
+    const onTimeUpdate = () => { currentTimeAtEnd = video.currentTime; };
+    video.addEventListener('timeupdate', onTimeUpdate);
 
-      const webmBlob = await recordSegment(destNode.stream, dur);
+    for (let segIdx = 0; isExtracting; segIdx++) {
+      const segStart = segIdx * SEG;
+
+      // Record one 15-second chunk from the live audio graph.
+      const webmBlob = await recordSegment(destNode.stream, SEG);
+      const segEnd = video.currentTime;
+
+      // If the video advanced less than 2 seconds during a 15-second recording
+      // window and we already have content, the video has reached its true end.
+      if (segEnd - segStart < 2 && segIdx > 0) break;
+
       const audioData = await webmToFloat32(webmBlob);
       audioChunks.push(audioData);
       window._extractedAudioChunks = audioChunks;
@@ -402,24 +390,33 @@ async function extractDirect(file) {
 
       if (result.text && result.text.trim()) {
         if (!hasSrt) { hasSrt = true; $('extractDownloads').classList.remove('hidden'); $('downloadSrtBtn').disabled = false; }
-        const translation = doTranslate
-          ? await translator.translate(result.text, detectedLang, targetLang, [])
-          : '';
+        let translation = '';
+        if (doTranslate) {
+          try {
+            translation = await translator.translate(result.text, detectedLang, targetLang, []);
+          } catch (e) {
+            console.warn('[SidePanel] Translation failed, skipping:', e.message);
+          }
+        }
+        const segEndTime = (segIdx + 1) * SEG;
         srtExporter.addSegment({
-          start: t,
-          end: t + dur,
+          start: segStart,
+          end: segEndTime,
           original: result.text.trim(),
           translation,
           detectedLanguage: detectedLang,
         });
-        addSubtitleCard(t, result.text.trim(), translation, isRtl(detectedLang) || isRtl(targetLang));
+        addSubtitleCard(segStart, result.text.trim(), translation, isRtl(detectedLang) || isRtl(targetLang));
       }
 
-      const pct = Math.min(100, Math.round(((t + dur) / duration) * 100));
-      $('extractFill').style.width = pct + '%';
-      $('extractStatus').textContent = i18n.t('status_extracting_progress', { progress: pct });
+      // Show progress: we don't know total duration, so use currentTime as a proxy.
+      const progressTime = Math.max(segEnd, currentTimeAtEnd);
+      const shownPct = Math.min(100, Math.round((progressTime / (progressTime + 60)) * 100));
+      $('extractFill').style.width = shownPct + '%';
+      $('extractStatus').textContent = i18n.t('status_extracting_progress', { progress: shownPct });
     }
 
+    video.removeEventListener('timeupdate', onTimeUpdate);
     video.pause();
     onExtractDone(srtExporter.getSegmentCount());
 
