@@ -54,6 +54,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           playerTabId = sender.tab?.id || null;
           return { success: true };
 
+        case 'EXTRACT_COMPLETE':
+          if (sidePanelPort) {
+            try { sidePanelPort.postMessage({ type: 'EXTRACT_COMPLETE', count: message.count }); } catch {}
+          }
+          return { success: true };
+
         case 'PLAYER_CLOSED':
           playerTabId = null;
           return { success: true };

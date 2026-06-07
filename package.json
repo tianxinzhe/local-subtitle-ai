@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "node build.js",
-    "lint": "echo 'Lint not configured yet'"
+    "lint": "echo 'Lint not configured yet'",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",

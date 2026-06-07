@@ -53,6 +53,13 @@
   "hint_capture_retry": { "message": "Make the video tab active → click AI icon → try Capture again" },
   "error_capture_no_tab": { "message": "No active browser tab found" },
   "error_capture_chrome_page": { "message": "Cannot capture Chrome internal pages" },
+  "btn_play": { "message": "Play" },
+  "btn_extract": { "message": "Extract Subtitles" },
+  "status_extracting_audio": { "message": "Extracting audio..." },
+  "status_extracting_progress": { "message": "Extracting subtitles... {{progress}}%" },
+  "status_transcribing_all": { "message": "Transcribing: {{current}}/{{total}}" },
+  "status_translating_all": { "message": "Translating: {{current}}/{{total}}" },
+  "status_extract_done": { "message": "Done. {{count}} subtitles generated." },
   "status_requesting_capture": { "message": "Requesting audio stream..." },
   "hint_capture_flow": { "message": "1. Go to video page  2. Click AI icon in toolbar  3. Click Start Capture" },
 

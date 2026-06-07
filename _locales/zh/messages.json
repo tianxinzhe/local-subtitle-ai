@@ -53,6 +53,13 @@
   "hint_capture_retry": { "message": "切换到视频页面 → 点击 AI 图标 → 重新捕获" },
   "error_capture_no_tab": { "message": "未找到活动的浏览器标签页" },
   "error_capture_chrome_page": { "message": "无法捕获 Chrome 内部页面" },
+  "btn_play": { "message": "播放" },
+  "btn_extract": { "message": "提取字幕" },
+  "status_extracting_audio": { "message": "正在提取音频..." },
+  "status_extracting_progress": { "message": "正在提取字幕... {{progress}}%" },
+  "status_transcribing_all": { "message": "转录中: {{current}}/{{total}}" },
+  "status_translating_all": { "message": "翻译中: {{current}}/{{total}}" },
+  "status_extract_done": { "message": "完成！已生成 {{count}} 条字幕" },
   "status_requesting_capture": { "message": "正在请求音频流..." },
   "hint_capture_flow": { "message": "1. 打开视频页面  2. 点击工具栏 AI 图标  3. 点击开始捕获" },
 

@@ -87,7 +87,20 @@
           <span class="mode-info-dot loaded"></span>
           <span id="fileNameDisplay"></span>
         </div>
-      </div>
+        <div id="fileActions" class="mode-actions hidden">
+          <button id="playBtn" class="mode-action-btn play-btn">
+            <span class="btn-icon">▶</span>
+            <span class="btn-text" data-i18n="btn_play">Play</span>
+          </button>
+          <button id="extractBtn" class="mode-action-btn extract-btn">
+            <span class="btn-icon">⚡</span>
+            <span class="btn-text" data-i18n="btn_extract">Extract Subtitles</span>
+          </button>
+        </div>
+        <div id="extractProgress" class="extract-progress hidden">
+          <div class="extract-bar"><div id="extractFill"></div></div>
+          <span id="extractStatus">Processing...</span>
+        </div>
     </section>
 
     <section id="subtitleSection">

@@ -14,6 +14,7 @@ let currentFile = null;
 let isProcessing = false;
 let isAiReady = false;
 let isCapturing = false;
+let isExtracting = false;
 let fullSpeedMode = false;
 let captureStream = null;
 let captureAudioContext = null;
@@ -56,6 +57,9 @@ async function connectBackground() {
         break;
       case 'PLAYER_CLOSED':
         onPlayerClosed();
+        break;
+      case 'EXTRACT_COMPLETE':
+        onExtractDone(msg.count);
         break;
       case 'CAPTURE_STOPPED':
         onCaptureStopped();
@@ -201,6 +205,14 @@ function setupEventListeners() {
     await saveConfig({ subtitleBgOpacity: parseFloat($('settingBgOpacity').value) });
   });
 
+  $('playBtn').addEventListener('click', () => {
+    if (currentFile) openPlayer(currentFile);
+  });
+
+  $('extractBtn').addEventListener('click', () => {
+    if (currentFile) extractDirect(currentFile);
+  });
+
   $('settingsPanel').addEventListener('click', (e) => {
     if (e.target === $('settingsPanel')) {
       $('settingsPanel').classList.add('hidden');
@@ -274,20 +286,156 @@ function handleFileDrop(file) {
   $('dropText').textContent = file.name;
   $('fileNameDisplay').textContent = file.name;
   $('fileInfo').classList.remove('hidden');
+  $('fileActions').classList.remove('hidden');
+  $('extractProgress').classList.add('hidden');
   $('modeLocal').classList.add('active');
-  setStatus('processing', 'Opening player...');
-
-  openPlayer(file);
+  setStatus('ready', i18n.t('status_idle'));
 }
 
-async function openPlayer(file) {
+async function openPlayer(file, extractMode) {
   await fileStore.save('pendingVideo', file);
   await fileStore.save('pendingVideoName', file.name);
-  const msg = { type: 'OPEN_PLAYER', fileName: file.name, fileSize: file.size };
+  await fileStore.save('extractMode', !!extractMode);
+  const msg = { type: 'OPEN_PLAYER', fileName: file.name, fileSize: file.size, extractMode: !!extractMode };
   if (backgroundPort) {
     try { backgroundPort.postMessage(msg); return; } catch {}
   }
   try { await chrome.runtime.sendMessage(msg); } catch {}
+}
+
+async function extractDirect(file) {
+  $('fileActions').classList.add('hidden');
+  $('extractProgress').classList.remove('hidden');
+  $('extractBtn').disabled = true;
+  $('extractFill').style.width = '0%';
+  $('extractStatus').textContent = i18n.t('status_extracting_audio');
+
+  srtExporter.clear();
+  sentenceMerger.reset?.();
+  $('subtitleList').innerHTML = '<div id="emptyState" class="empty-state">No subtitles yet</div>';
+  $('subtitleCount').textContent = '0';
+  isExtracting = true;
+
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.style.display = 'none';
+  document.body.appendChild(video);
+
+  let audioCtx = null;
+  const blobUrl = URL.createObjectURL(file);
+
+  try {
+    const config = await loadConfig();
+    const sourceLang = config.sourceLanguage || 'auto';
+    const targetLang = config.targetLanguage || 'zh';
+    const doTranslate = !!targetLang && targetLang !== sourceLang;
+
+    video.src = blobUrl;
+    await new Promise((resolve, reject) => {
+      video.addEventListener('loadedmetadata', resolve, { once: true });
+      video.addEventListener('error', () => reject(new Error('Cannot load this file')), { once: true });
+    });
+
+    const duration = video.duration;
+    if (!duration || !isFinite(duration)) {
+      throw new Error('Cannot determine media duration');
+    }
+
+    const stream = video.captureStream();
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    const sourceNode = audioCtx.createMediaStreamSource(stream);
+    const destNode = audioCtx.createMediaStreamDestination();
+    sourceNode.connect(destNode);
+
+    const SEG = 15;
+    await video.play();
+
+    for (let t = 0; t < duration && isExtracting; t += SEG) {
+      const dur = Math.min(SEG, duration - t);
+
+      const webmBlob = await recordSegment(destNode.stream, dur);
+      const audioData = await webmToFloat32(webmBlob);
+
+      const result = await whisper.transcribe(audioData, {
+        returnTimestamps: true,
+        forceLanguage: sourceLang !== 'auto' ? sourceLang : null,
+      });
+
+      const detectedLang = result.detectedLanguage || sourceLang || 'en';
+
+      if (result.text && result.text.trim()) {
+        const translation = doTranslate
+          ? await translator.translate(result.text, detectedLang, targetLang, [])
+          : '';
+        srtExporter.addSegment({
+          start: t,
+          end: t + dur,
+          original: result.text.trim(),
+          translation,
+          detectedLanguage: detectedLang,
+        });
+        addSubtitleCard(t, result.text.trim(), translation, isRtl(detectedLang) || isRtl(targetLang));
+      }
+
+      const pct = Math.min(100, Math.round(((t + dur) / duration) * 100));
+      $('extractFill').style.width = pct + '%';
+      $('extractStatus').textContent = i18n.t('status_extracting_progress', { progress: pct });
+    }
+
+    video.pause();
+    onExtractDone(srtExporter.getSegmentCount());
+
+  } catch (err) {
+    console.error('[SidePanel] Extract error:', err);
+    $('extractStatus').textContent = 'Error: ' + err.message;
+    setStatus('error', err.message);
+    $('extractBtn').disabled = false;
+    isExtracting = false;
+  } finally {
+    if (audioCtx) audioCtx.close();
+    URL.revokeObjectURL(blobUrl);
+    if (video.parentNode) document.body.removeChild(video);
+  }
+}
+
+function recordSegment(stream, durationSec) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let rec;
+    try {
+      rec = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+    } catch (e) {
+      rec = new MediaRecorder(stream);
+    }
+    rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    rec.onstop = () => resolve(new Blob(chunks, { type: 'audio/webm' }));
+    rec.onerror = (e) => reject(e.error || new Error('Recording failed'));
+    rec.start();
+    setTimeout(() => { if (rec.state === 'recording') rec.stop(); }, durationSec * 1000);
+  });
+}
+
+async function webmToFloat32(blob) {
+  const buf = await blob.arrayBuffer();
+  const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+  try {
+    const audioBuf = await ctx.decodeAudioData(buf);
+    const data = audioBuf.getChannelData(0);
+    return new Float32Array(data);
+  } finally {
+    ctx.close();
+  }
+}
+
+function onExtractDone(count) {
+  isExtracting = false;
+  const c = typeof count === 'number' ? count : srtExporter.getSegmentCount();
+  $('extractFill').style.width = '100%';
+  $('extractStatus').textContent = i18n.t('status_extract_done', { count: c });
+  updateExportButton();
+  setStatus('ready', i18n.t('status_idle'));
+  $('extractBtn').disabled = false;
 }
 
 async function handleAsrRequest(msg) {

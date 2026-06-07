@@ -12,6 +12,9 @@ let subtitleTimeout = null;
 let detectionInterval = null;
 let lastProcessedTime = 0;
 let lastSubtitleEnd = 0;
+let audioCaptureStream = null;
+let audioCaptureRecorder = null;
+let extractMode = false;
 
 function localizeHtml() {
   for (const el of document.querySelectorAll('[data-i18n]')) {
@@ -40,6 +43,8 @@ async function loadPendingFile() {
     const file = await fileStore.load('pendingVideo');
     if (file) {
       const name = await fileStore.load('pendingVideoName') || file.name;
+      const extract = await fileStore.load('extractMode');
+      extractMode = !!extract;
       const url = URL.createObjectURL(file);
       const video = $('videoPlayer');
       video.src = url;
@@ -49,9 +54,13 @@ async function loadPendingFile() {
       video.addEventListener('canplay', () => {
         $('loadingOverlay').classList.add('hidden');
         showToast('Video loaded: ' + name);
+        if (extractMode) {
+          video.play();
+        }
       }, { once: true });
       await fileStore.remove('pendingVideo');
       await fileStore.remove('pendingVideoName');
+      await fileStore.remove('extractMode');
     }
   } catch (err) {
     console.error('[Player] Failed to load pending file:', err);
@@ -193,6 +202,13 @@ function setupVideoListeners() {
     $('loadingOverlay').classList.add('hidden');
   });
 
+  video.addEventListener('ended', () => {
+    stopDetection();
+    if (extractMode) {
+      try { chrome.runtime.sendMessage({ type: 'EXTRACT_COMPLETE' }); } catch {}
+    }
+  });
+
   video.addEventListener('error', (e) => {
     showToast('Video error: ' + (video.error?.message || 'Unknown'));
   });
@@ -257,53 +273,45 @@ async function maybeExtractAudio() {
   }
 }
 
+function ensureCaptureStream() {
+  const video = $('videoPlayer');
+  if (audioCaptureStream) return audioCaptureStream;
+  try {
+    audioCaptureStream = video.captureStream();
+  } catch (e) {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    const dest = ctx.createMediaStreamDestination();
+    const src = ctx.createMediaElementSource(video);
+    src.connect(dest);
+    audioCaptureStream = dest.stream;
+  }
+  return audioCaptureStream;
+}
+
+async function captureAudioSegment(durationSec) {
+  const stream = ensureCaptureStream();
+  return new Promise((resolve) => {
+    const chunks = [];
+    const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+    audioCaptureRecorder = recorder;
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      const buf = await blob.arrayBuffer();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const audioBuf = await ctx.decodeAudioData(buf);
+      resolve(audioBuf.getChannelData(0));
+      ctx.close();
+    };
+    recorder.start();
+    setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, durationSec * 1000);
+  });
+}
+
 async function extractCurrentAudio(currentTime, durationSec) {
   const video = $('videoPlayer');
-  if (!video.src) return null;
-
-  try {
-    const response = await fetch(video.src);
-    const blob = await response.blob();
-    const file = new File([blob], 'video', { type: blob.type || 'video/mp4' });
-
-    const audioData = await audioProcessor.decodeAudioSegment(file, currentTime, durationSec);
-    return audioData;
-  } catch (err) {
-    console.error('[Player] Audio extraction failed:', err);
-
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 16000,
-      });
-      const source = audioContext.createMediaElementSource(video);
-      const destination = audioContext.createMediaStreamDestination();
-      source.connect(destination);
-
-      const mediaRecorder = new MediaRecorder(destination.stream, {
-        mimeType: 'audio/webm;codecs=opus',
-      });
-
-      return new Promise((resolve) => {
-        const chunks = [];
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) chunks.push(e.data);
-        };
-
-        mediaRecorder.onstop = async () => {
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          const arrayBuffer = await blob.arrayBuffer();
-          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-          resolve(audioBuffer.getChannelData(0));
-        };
-
-        mediaRecorder.start();
-        setTimeout(() => mediaRecorder.stop(), durationSec * 1000);
-      });
-    } catch (err2) {
-      console.error('[Player] Fallback audio extraction also failed:', err2);
-      return null;
-    }
-  }
+  if (!video.src || video.paused) return null;
+  return captureAudioSegment(durationSec);
 }
 
 function displaySubtitle(subtitles) {
@@ -378,8 +386,17 @@ function showToast(msg) {
 
 document.addEventListener('DOMContentLoaded', init);
 
+function cleanupCapture() {
+  if (audioCaptureRecorder && audioCaptureRecorder.state === 'recording') {
+    audioCaptureRecorder.stop();
+    audioCaptureRecorder = null;
+  }
+  audioCaptureStream = null;
+}
+
 window.addEventListener('beforeunload', () => {
   stopDetection();
+  cleanupCapture();
   try {
     chrome.runtime.sendMessage({ type: 'PLAYER_CLOSED' });
   } catch {}

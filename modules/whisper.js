@@ -85,10 +85,16 @@ class WhisperEngine {
     const language = options.language || null;
     const forceLanguage = options.forceLanguage || null;
 
-    const input = {
-      array: audioFloat32Array,
-      sampling_rate: 16000,
-    };
+    let input = audioFloat32Array;
+    if (!(input instanceof Float32Array)) {
+      if (input && input.array instanceof Float32Array) {
+        input = input.array;
+      } else if (ArrayBuffer.isView(input)) {
+        input = new Float32Array(input.buffer, input.byteOffset, input.length);
+      } else if (Array.isArray(input)) {
+        input = Float32Array.from(input);
+      }
+    }
 
     const pipelineOptions = {
       return_timestamps: options.returnTimestamps || false,
@@ -117,7 +123,7 @@ class WhisperEngine {
       text: result.text,
       chunks: result.chunks || [],
       detectedLanguage,
-      duration: audioFloat32Array.length / 16000,
+      duration: input.length / 16000,
     };
   }
 
