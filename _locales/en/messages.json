@@ -65,6 +65,9 @@
 
   "tooltip_full_speed": { "message": "Full speed silent extraction (10x-20x faster)" },
 
+  "btn_download_audio": { "message": "Download Audio (WAV)" },
+  "btn_download_srt": { "message": "Download Subtitles (SRT)" },
+
   "setting_section_general": { "message": "General" },
   "setting_section_asr": { "message": "Speech Recognition" },
   "setting_section_translate": { "message": "Translation" },

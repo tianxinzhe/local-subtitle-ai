@@ -65,6 +65,9 @@
 
   "tooltip_full_speed": { "message": "极速静音提取（10x-20x 加速）" },
 
+  "btn_download_audio": { "message": "下载音频 (WAV)" },
+  "btn_download_srt": { "message": "下载字幕 (SRT)" },
+
   "setting_section_general": { "message": "通用" },
   "setting_section_asr": { "message": "语音识别" },
   "setting_section_translate": { "message": "翻译" },

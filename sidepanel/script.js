@@ -218,6 +218,9 @@ function setupEventListeners() {
       $('settingsPanel').classList.add('hidden');
     }
   });
+
+  $('downloadAudioBtn').addEventListener('click', downloadExtractedAudio);
+  $('downloadSrtBtn').addEventListener('click', downloadExtractedSrt);
 }
 
 async function toggleAi() {
@@ -316,6 +319,12 @@ async function extractDirect(file) {
   $('subtitleCount').textContent = '0';
   isExtracting = true;
 
+  const audioChunks = [];
+  let hasAudio = false, hasSrt = false;
+  $('extractDownloads').classList.add('hidden');
+  $('downloadAudioBtn').disabled = true;
+  $('downloadSrtBtn').disabled = true;
+
   const video = document.createElement('video');
   video.muted = true;
   video.playsInline = true;
@@ -356,6 +365,13 @@ async function extractDirect(file) {
 
       const webmBlob = await recordSegment(destNode.stream, dur);
       const audioData = await webmToFloat32(webmBlob);
+      audioChunks.push(audioData);
+      window._extractedAudioChunks = audioChunks;
+      if (!hasAudio) {
+        hasAudio = true;
+        $('extractDownloads').classList.remove('hidden');
+        $('downloadAudioBtn').disabled = false;
+      }
 
       const result = await whisper.transcribe(audioData, {
         returnTimestamps: true,
@@ -365,6 +381,7 @@ async function extractDirect(file) {
       const detectedLang = result.detectedLanguage || sourceLang || 'en';
 
       if (result.text && result.text.trim()) {
+        if (!hasSrt) { hasSrt = true; $('extractDownloads').classList.remove('hidden'); $('downloadSrtBtn').disabled = false; }
         const translation = doTranslate
           ? await translator.translate(result.text, detectedLang, targetLang, [])
           : '';
@@ -635,6 +652,88 @@ async function exportSrt() {
 
   $('exportBtn').disabled = false;
   $('exportBtn').innerHTML = '<span class="icon">📥</span><span>' + i18n.t('btn_export_srt') + '</span>';
+}
+
+function float32ToWavBlob(float32Array, sampleRate) {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+  const blockAlign = numChannels * bitsPerSample / 8;
+  const dataSize = float32Array.length * blockAlign;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  function writeString(offset, str) {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  }
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let i = 0; i < float32Array.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    offset += 2;
+  }
+
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+function downloadExtractedAudio() {
+  if (!window._extractedAudioChunks || window._extractedAudioChunks.length === 0) return;
+  const totalLen = window._extractedAudioChunks.reduce((s, c) => s + c.length, 0);
+  const combined = new Float32Array(totalLen);
+  let offset = 0;
+  for (const c of window._extractedAudioChunks) {
+    combined.set(c, offset);
+    offset += c.length;
+  }
+  const blob = float32ToWavBlob(combined, 16000);
+  const url = URL.createObjectURL(blob);
+  const name = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') + '_audio.wav' : 'extracted_audio.wav';
+  try {
+    chrome.downloads.download({ url, filename: name, saveAs: true }, () => {
+      URL.revokeObjectURL(url);
+    });
+  } catch {
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+function downloadExtractedSrt() {
+  if (srtExporter.getSegmentCount() === 0) return;
+  const content = srtExporter.exportOriginalOnly();
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + content], { type: 'text/srt;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const name = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') + '_original.srt' : 'subtitles_original.srt';
+  try {
+    chrome.downloads.download({ url, filename: name, saveAs: true }, () => {
+      URL.revokeObjectURL(url);
+    });
+  } catch {
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }
 
 async function toggleCapture() {
