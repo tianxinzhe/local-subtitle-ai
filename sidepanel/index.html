@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="sidepanel_title">AI Subtitles</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header id="header">
+      <div id="logo">
+        <span class="logo-icon">AI</span>
+        <span class="logo-text" data-i18n="app_name">Local AI Subtitles Pro</span>
+      </div>
+    </header>
+
+    <section id="controlSection">
+      <div id="controlRow">
+        <button id="activateBtn" class="primary-btn">
+          <span class="btn-ring"></span>
+          <span class="btn-label" data-i18n="btn_activate_ai">Activate</span>
+        </button>
+        <div id="statusBadge" class="status-idle">
+          <span id="statusDot"></span>
+          <span id="statusText" data-i18n="status_idle">Ready</span>
+        </div>
+      </div>
+
+      <div id="progressContainer" class="hidden">
+        <div id="progressBar">
+          <div id="progressFill"></div>
+        </div>
+        <span id="progressLabel">0%</span>
+      </div>
+
+      <div class="lang-row">
+        <div class="lang-group">
+          <label for="sourceLang" data-i18n="label_source_lang">Source</label>
+          <select id="sourceLang">
+            <option value="auto" data-i18n="option_auto_detect">Auto</option>
+          </select>
+        </div>
+        <div class="lang-group">
+          <label for="targetLang" data-i18n="label_target_lang">Target</label>
+          <select id="targetLang"></select>
+        </div>
+      </div>
+    </section>
+
+    <section id="modeSection">
+      <div id="modeOnline" class="mode-card" data-mode="online">
+        <div class="mode-card-header">
+          <span class="mode-icon">🖥</span>
+          <span class="mode-label" data-i18n="mode_online">Online Playback</span>
+        </div>
+        <p class="mode-desc" data-i18n="mode_online_desc">Click the AI icon (top-right toolbar) on your video page, then capture</p>
+        <div class="mode-actions">
+          <button id="captureBtn" class="mode-action-btn capture-btn" disabled>
+            <span class="btn-icon">🎤</span>
+            <span class="btn-text" data-i18n="btn_capture_audio">Start Capture</span>
+          </button>
+          <button id="fullSpeedToggle" class="mode-icon-btn" data-i18n-title="tooltip_full_speed" title="Fast mode">
+            <span>⚡</span>
+          </button>
+        </div>
+        <div id="captureInfo" class="mode-info hidden">
+          <span class="mode-info-dot recording"></span>
+          <span data-i18n="status_capturing">Capturing tab audio...</span>
+        </div>
+        <div id="captureHint" class="mode-hint">
+          <span data-i18n="hint_capture_flow">1. Go to video page  2. Click AI icon in toolbar  3. Click Start Capture</span>
+        </div>
+      </div>
+
+      <div id="modeLocal" class="mode-card" data-mode="local">
+        <div class="mode-card-header">
+          <span class="mode-icon">📁</span>
+          <span class="mode-label" data-i18n="mode_local">Local File</span>
+        </div>
+        <p class="mode-desc" data-i18n="mode_local_desc">Open a video or audio file from your device</p>
+        <div id="dropZone" class="drop-zone">
+          <span id="dropText" data-i18n="hint_drop_file">Drop file here or click to browse</span>
+          <input type="file" id="fileInput" accept="video/*,.mkv,.avi,.mov,.wmv,.flv,.webm,audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac,.wma" hidden>
+        </div>
+        <div id="fileInfo" class="mode-info hidden">
+          <span class="mode-info-dot loaded"></span>
+          <span id="fileNameDisplay"></span>
+        </div>
+      </div>
+    </section>
+
+    <section id="subtitleSection">
+      <div class="section-header">
+        <h3 data-i18n="label_subtitles">Subtitles</h3>
+        <span id="subtitleCount" class="count-badge">0</span>
+      </div>
+      <div id="subtitleList">
+        <div id="emptyState" class="empty-state" data-i18n="label_no_subtitles">No subtitles yet</div>
+      </div>
+    </section>
+
+    <footer id="footer">
+      <button id="exportBtn" class="export-btn" disabled>
+        <span class="icon">📥</span>
+        <span data-i18n="btn_export_srt">Export SRT</span>
+      </button>
+      <button id="settingsBtn" class="icon-btn">
+        <span class="icon">⚙️</span>
+      </button>
+    </footer>
+  </div>
+
+  <div id="settingsPanel" class="settings-overlay hidden">
+    <div class="settings-modal">
+      <div class="settings-header">
+        <h3 data-i18n="label_settings">Settings</h3>
+        <button id="closeSettings" class="icon-btn">&times;</button>
+      </div>
+      <div class="settings-body">
+        <fieldset>
+          <legend data-i18n="setting_section_general">General</legend>
+          <div class="setting-row">
+            <label for="settingUiLang" data-i18n="label_ui_lang">Interface Language</label>
+            <select id="settingUiLang">
+              <option value="en">English</option>
+              <option value="zh">中文</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="es">Español</option>
+              <option value="ru">Русский</option>
+            </select>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend data-i18n="setting_section_asr">Speech Recognition</legend>
+          <div class="setting-row">
+            <label for="settingAsrModel" data-i18n="label_asr_model">ASR Model</label>
+            <select id="settingAsrModel">
+              <option value="tiny" data-i18n="option_tiny_model">Whisper Tiny (75MB)</option>
+              <option value="base" data-i18n="option_base_model">Whisper Base (140MB)</option>
+            </select>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend data-i18n="setting_section_subtitle">Subtitle Display</legend>
+          <div class="setting-row">
+            <label for="settingFontSize" data-i18n="setting_subtitle_font_size">Font Size</label>
+            <input type="number" id="settingFontSize" min="12" max="48" value="18">
+          </div>
+          <div class="setting-row">
+            <label for="settingFontColor" data-i18n="setting_subtitle_color">Font Color</label>
+            <input type="color" id="settingFontColor" value="#FFD700">
+          </div>
+          <div class="setting-row">
+            <label for="settingBgOpacity" data-i18n="setting_subtitle_bg_opacity">Background Opacity</label>
+            <input type="range" id="settingBgOpacity" min="0" max="1" step="0.1" value="0.6">
+          </div>
+        </fieldset>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,645 @@
+import { loadConfig, saveConfig, get } from '../modules/config.js';
+import { i18n } from '../modules/i18n.js';
+import { whisper } from '../modules/whisper.js';
+import { translator } from '../modules/translator.js';
+import { audioProcessor } from '../modules/audio-processor.js';
+import { sentenceMerger } from '../modules/sentence-merger.js';
+import { slidingWindow } from '../modules/sliding-window.js';
+import { srtExporter } from '../modules/srt-exporter.js';
+import { getAllLanguages, getLanguage, getLanguageDisplayName, isRtl } from '../modules/languages.js';
+import { fileStore } from '../modules/file-store.js';
+
+let backgroundPort = null;
+let currentFile = null;
+let isProcessing = false;
+let isAiReady = false;
+let isCapturing = false;
+let fullSpeedMode = false;
+let captureStream = null;
+let captureAudioContext = null;
+
+const $ = (id) => document.getElementById(id);
+
+function localizeHtml() {
+  for (const el of document.querySelectorAll('[data-i18n]')) {
+    el.textContent = i18n.t(el.getAttribute('data-i18n'));
+  }
+  for (const el of document.querySelectorAll('[data-i18n-title]')) {
+    el.title = i18n.t(el.getAttribute('data-i18n-title'));
+  }
+  document.documentElement.lang = i18n.getCurrentLanguage();
+}
+
+async function init() {
+  await i18n.init();
+  localizeHtml();
+  await connectBackground();
+  await populateLanguageDropdowns();
+  await loadSettings();
+  setupEventListeners();
+  setModeCardsEnabled(false);
+}
+
+async function connectBackground() {
+  backgroundPort = chrome.runtime.connect({ name: 'sidepanel' });
+
+  backgroundPort.onMessage.addListener(async (msg) => {
+    switch (msg.type) {
+      case 'ASR_REQUEST':
+        await handleAsrRequest(msg);
+        break;
+      case 'TRANSLATE_REQUEST':
+        await handleTranslateRequest(msg);
+        break;
+      case 'CONFIG_UPDATED':
+        await onConfigUpdated(msg.updates);
+        break;
+      case 'PLAYER_CLOSED':
+        onPlayerClosed();
+        break;
+      case 'CAPTURE_STOPPED':
+        onCaptureStopped();
+        break;
+    }
+  });
+
+  backgroundPort.onDisconnect.addListener(() => {
+    backgroundPort = null;
+    setTimeout(connectBackground, 1000);
+  });
+}
+
+async function populateLanguageDropdowns() {
+  const sourceSelect = $('sourceLang');
+  const targetSelect = $('targetLang');
+
+  const languages = getAllLanguages();
+  const uiLang = i18n.getCurrentLanguage();
+
+  targetSelect.innerHTML = '';
+  for (const lang of languages) {
+    const opt = document.createElement('option');
+    opt.value = lang.code;
+    opt.textContent = lang.name[uiLang] || lang.name.en;
+    targetSelect.appendChild(opt);
+  }
+
+  sourceSelect.innerHTML = '<option value="auto">' + i18n.t('option_auto_detect') + '</option>';
+  for (const lang of languages) {
+    const opt = document.createElement('option');
+    opt.value = lang.code;
+    opt.textContent = lang.name[uiLang] || lang.name.en;
+    sourceSelect.appendChild(opt);
+  }
+}
+
+async function loadSettings() {
+  const config = await loadConfig();
+
+  $('sourceLang').value = config.sourceLanguage || 'auto';
+  $('targetLang').value = config.targetLanguage || 'zh';
+
+  $('settingUiLang').value = config.uiLanguage || 'en';
+  $('settingAsrModel').value = config.asrModel || 'tiny';
+  $('settingFontSize').value = config.subtitleFontSize || 18;
+  $('settingFontColor').value = config.subtitleColor || '#FFD700';
+  $('settingBgOpacity').value = config.subtitleBgOpacity || 0.6;
+}
+
+function setModeCardsEnabled(enabled) {
+  const cards = document.querySelectorAll('.mode-card');
+  cards.forEach(c => c.classList.toggle('disabled', !enabled));
+  $('captureBtn').disabled = !enabled;
+}
+
+function setupEventListeners() {
+  $('activateBtn').addEventListener('click', toggleAi);
+
+  $('fileInput').addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      handleFileDrop(e.target.files[0]);
+    }
+  });
+
+  const dropZone = $('dropZone');
+  dropZone.addEventListener('click', () => $('fileInput').click());
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length > 0) {
+      handleFileDrop(e.dataTransfer.files[0]);
+    }
+  });
+
+  $('captureBtn').addEventListener('click', toggleCapture);
+
+  $('fullSpeedToggle').addEventListener('click', toggleFullSpeed);
+
+  $('sourceLang').addEventListener('change', async () => {
+    const val = $('sourceLang').value;
+    await saveConfig({ sourceLanguage: val });
+    try {
+      await chrome.runtime.sendMessage({
+        type: 'CONFIG_CHANGE',
+        updates: { sourceLanguage: val },
+      });
+    } catch {}
+  });
+
+  $('targetLang').addEventListener('change', async () => {
+    const val = $('targetLang').value;
+    await saveConfig({ targetLanguage: val });
+    try {
+      await chrome.runtime.sendMessage({
+        type: 'CONFIG_CHANGE',
+        updates: { targetLanguage: val },
+      });
+    } catch {}
+  });
+
+  $('exportBtn').addEventListener('click', exportSrt);
+
+  $('settingsBtn').addEventListener('click', () => {
+    $('settingsPanel').classList.remove('hidden');
+  });
+
+  $('closeSettings').addEventListener('click', () => {
+    $('settingsPanel').classList.add('hidden');
+  });
+
+  $('settingUiLang').addEventListener('change', async () => {
+    const lang = $('settingUiLang').value;
+    await i18n.setLanguage(lang);
+    await populateLanguageDropdowns();
+    await loadSettings();
+    location.reload();
+  });
+
+  $('settingAsrModel').addEventListener('change', async () => {
+    await saveConfig({ asrModel: $('settingAsrModel').value });
+  });
+
+  $('settingFontSize').addEventListener('change', async () => {
+    await saveConfig({ subtitleFontSize: parseInt($('settingFontSize').value) });
+  });
+
+  $('settingFontColor').addEventListener('change', async () => {
+    await saveConfig({ subtitleColor: $('settingFontColor').value });
+  });
+
+  $('settingBgOpacity').addEventListener('input', async () => {
+    await saveConfig({ subtitleBgOpacity: parseFloat($('settingBgOpacity').value) });
+  });
+
+  $('settingsPanel').addEventListener('click', (e) => {
+    if (e.target === $('settingsPanel')) {
+      $('settingsPanel').classList.add('hidden');
+    }
+  });
+}
+
+async function toggleAi() {
+  if (isAiReady) {
+    return;
+  }
+
+  const btn = $('activateBtn');
+  const progressContainer = $('progressContainer');
+  const progressFill = $('progressFill');
+  const progressLabel = $('progressLabel');
+  const statusBadge = $('statusBadge');
+
+  btn.disabled = true;
+  progressContainer.classList.remove('hidden');
+  statusBadge.className = 'status-loading';
+  $('statusText').textContent = i18n.t('status_downloading_model');
+
+  try {
+    await whisper.load({
+      onProgress: (pct, stage) => {
+        progressFill.style.width = pct + '%';
+        progressLabel.textContent = pct + '%';
+
+        if (stage === 'downloading') {
+          $('statusText').textContent = i18n.t('status_downloading_model', { progress: pct });
+        } else if (stage === 'ready' || stage === 'loaded') {
+          $('statusText').textContent = i18n.t('status_model_ready');
+        }
+      },
+    });
+
+    await translator.init({
+      onProgress: (pct, stage) => {
+        if (stage === 'gemini_ready') {
+          $('statusText').textContent = i18n.t('msg_engine_gemini');
+        } else if (stage === 'onnx_ready') {
+          $('statusText').textContent = i18n.t('msg_engine_onnx');
+        }
+      },
+    });
+
+    isAiReady = true;
+    btn.disabled = false;
+    progressContainer.classList.add('hidden');
+    statusBadge.className = 'status-ready';
+    $('statusText').textContent = i18n.t('status_model_ready');
+    setModeCardsEnabled(true);
+  } catch (err) {
+    btn.disabled = false;
+    progressContainer.classList.add('hidden');
+    statusBadge.className = 'status-error';
+    $('statusText').textContent = i18n.t('status_model_failed');
+    console.error('[SidePanel] AI init failed:', err);
+  }
+}
+
+function handleFileDrop(file) {
+  if (!isAiReady) {
+    showToast('Please activate AI first');
+    setStatus('error', 'Please activate AI first');
+    return;
+  }
+
+  currentFile = file;
+  $('dropText').textContent = file.name;
+  $('fileNameDisplay').textContent = file.name;
+  $('fileInfo').classList.remove('hidden');
+  $('modeLocal').classList.add('active');
+  setStatus('processing', 'Opening player...');
+
+  openPlayer(file);
+}
+
+async function openPlayer(file) {
+  await fileStore.save('pendingVideo', file);
+  await fileStore.save('pendingVideoName', file.name);
+  const msg = { type: 'OPEN_PLAYER', fileName: file.name, fileSize: file.size };
+  if (backgroundPort) {
+    try { backgroundPort.postMessage(msg); return; } catch {}
+  }
+  try { await chrome.runtime.sendMessage(msg); } catch {}
+}
+
+async function handleAsrRequest(msg) {
+  if (!msg.audio || !isAiReady) return;
+
+  setStatus('processing', i18n.t('status_transcribing'));
+
+  try {
+    const config = await loadConfig();
+    const sourceLang = config.sourceLanguage;
+
+    const result = await whisper.transcribe(msg.audio, {
+      forceLanguage: sourceLang !== 'auto' ? sourceLang : null,
+      returnTimestamps: true,
+    });
+
+    const detectedLang = result.detectedLanguage || sourceLang || 'en';
+
+    if (sourceLang === 'auto' && detectedLang) {
+      $('sourceLang').value = detectedLang;
+      await saveConfig({ sourceLanguage: detectedLang });
+    }
+
+    const merged = sentenceMerger.feed({
+      text: result.text,
+      start: msg.timestamp || 0,
+      end: (msg.timestamp || 0) + result.duration,
+    }, detectedLang);
+
+    if (merged) {
+      await translateAndSend(merged, detectedLang);
+    }
+
+    if (backgroundPort) {
+      backgroundPort.postMessage({
+        type: 'ASR_RESULT',
+        text: result.text,
+        detectedLanguage: detectedLang,
+        timestamp: msg.timestamp,
+        requestId: msg.requestId,
+      });
+    }
+
+    setStatus('ready', i18n.t('status_idle'));
+  } catch (err) {
+    console.error('[SidePanel] ASR error:', err);
+    setStatus('error', i18n.t('status_error', { error: err.message }));
+  }
+}
+
+async function handleTranslateRequest(msg) {
+  setStatus('processing', i18n.t('status_translating'));
+
+  try {
+    const translation = await translator.translate(
+      msg.text,
+      msg.sourceLang,
+      msg.targetLang,
+      msg.context || []
+    );
+
+    if (backgroundPort) {
+      backgroundPort.postMessage({
+        type: 'TRANSLATE_RESULT',
+        text: translation,
+        requestId: msg.requestId,
+      });
+    }
+
+    setStatus('ready', i18n.t('status_idle'));
+  } catch (err) {
+    console.error('[SidePanel] Translate error:', err);
+    setStatus('error', i18n.t('status_error', { error: err.message }));
+  }
+}
+
+async function translateAndSend(merged, detectedLang) {
+  const config = await loadConfig();
+  const targetLang = config.targetLanguage || 'zh';
+  const ctxSize = config.slidingWindowSize || 3;
+
+  slidingWindow.setSize(ctxSize);
+  slidingWindow.setLanguages(detectedLang, targetLang);
+
+  setStatus('processing', i18n.t('status_translating'));
+
+  try {
+    const context = slidingWindow.getContext();
+    const translation = await translator.translate(
+      merged.text,
+      detectedLang,
+      targetLang,
+      context
+    );
+
+    slidingWindow.push(merged.text, translation);
+
+    const rtl = isRtl(detectedLang) || isRtl(targetLang);
+
+    srtExporter.addSegment({
+      start: merged.start,
+      end: merged.end,
+      original: merged.text,
+      translation,
+      detectedLanguage: detectedLang,
+    });
+
+    addSubtitleCard(merged.start, merged.text, translation, rtl);
+
+    if (backgroundPort) {
+      backgroundPort.postMessage({
+        type: 'SUBTITLE_SYNC',
+        subtitles: [{
+          start: merged.start,
+          end: merged.end,
+          original: merged.text,
+          translation,
+          rtl,
+        }],
+      });
+    }
+
+    updateExportButton();
+  } catch (err) {
+    console.error('[SidePanel] Translate error:', err);
+  }
+
+  setStatus('ready', i18n.t('status_idle'));
+}
+
+function addSubtitleCard(timestamp, original, translation, rtl) {
+  const list = $('subtitleList');
+  const emptyState = $('emptyState');
+
+  if (emptyState) {
+    emptyState.remove();
+  }
+
+  const card = document.createElement('div');
+  card.className = 'subtitle-card';
+
+  const timeStr = formatTimestamp(timestamp);
+
+  const timeEl = document.createElement('div');
+  timeEl.className = 'timestamp';
+  timeEl.textContent = timeStr;
+  card.appendChild(timeEl);
+
+  if (original) {
+    const origEl = document.createElement('div');
+    origEl.className = 'original' + (rtl ? ' rtl' : '');
+    origEl.textContent = original;
+    card.appendChild(origEl);
+  }
+
+  if (translation && translation !== original) {
+    const transEl = document.createElement('div');
+    transEl.className = 'translation' + (rtl ? ' rtl' : '');
+    transEl.textContent = translation;
+    card.appendChild(transEl);
+  }
+
+  list.appendChild(card);
+  list.scrollTop = list.scrollHeight;
+
+  const count = srtExporter.getSegmentCount();
+  $('subtitleCount').textContent = count;
+}
+
+function formatTimestamp(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function updateExportButton() {
+  const count = srtExporter.getSegmentCount();
+  $('exportBtn').disabled = count === 0;
+}
+
+async function exportSrt() {
+  if (srtExporter.getSegmentCount() === 0) return;
+
+  const config = await loadConfig();
+  $('exportBtn').disabled = true;
+  $('exportBtn').textContent = i18n.t('status_exporting');
+
+  try {
+    await srtExporter.download(
+      config.exportBilingual !== false,
+      config.sourceLanguage,
+      config.targetLanguage
+    );
+  } catch (err) {
+    console.error('[SidePanel] Export failed:', err);
+  }
+
+  $('exportBtn').disabled = false;
+  $('exportBtn').innerHTML = '<span class="icon">📥</span><span>' + i18n.t('btn_export_srt') + '</span>';
+}
+
+async function toggleCapture() {
+  if (isCapturing) {
+    await stopCapture();
+  } else {
+    await startCapture();
+  }
+}
+
+async function startCapture() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) {
+      setStatus('error', i18n.t('error_capture_no_tab'));
+      return;
+    }
+
+    if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('about:'))) {
+      setStatus('error', i18n.t('error_capture_chrome_page'));
+      return;
+    }
+
+    setStatus('processing', i18n.t('status_requesting_capture'));
+
+    const streamId = await chrome.runtime.sendMessage({
+      type: 'GET_CAPTURE_STREAM_ID',
+      targetTabId: tab.id,
+    });
+
+    if (!streamId || streamId.error) {
+      const msg = streamId?.error || '';
+      if (msg.includes('not been invoked') || msg.includes('activeTab')) {
+        setStatus('error', i18n.t('error_capture_switch_tab'));
+        $('captureInfo').classList.remove('hidden');
+        $('captureInfo').innerHTML = '<span class="mode-info-dot"></span><span>' + i18n.t('hint_capture_retry') + '</span>';
+        showToast(i18n.t('hint_capture_retry'));
+      } else {
+        setStatus('error', msg || i18n.t('error_capture_no_tab'));
+      }
+      return;
+    }
+
+    captureStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        mandatory: {
+          chromeMediaSource: 'tab',
+          chromeMediaSourceId: streamId,
+        },
+      },
+    });
+
+    await chrome.runtime.sendMessage({
+      type: 'CAPTURE_START',
+      tabId: tab.id,
+    }).catch(() => {});
+
+    $('captureBtn').innerHTML = '<span class="btn-icon">⏹</span><span class="btn-text">' + i18n.t('btn_stop_capture') + '</span>';
+    $('captureBtn').classList.add('capturing');
+    $('captureInfo').classList.remove('hidden');
+    $('modeOnline').classList.add('active');
+    isCapturing = true;
+
+    await audioProcessor.captureTabAudio(captureStream, {
+      onData: async (chunk) => {
+        if (!isAiReady) return;
+
+        const result = await whisper.transcribe(chunk.data, {
+          returnTimestamps: true,
+        });
+
+        const config = await loadConfig();
+        const sourceLang = config.sourceLanguage;
+        const detectedLang = result.detectedLanguage || sourceLang || 'en';
+
+        const merged = sentenceMerger.feed({
+          text: result.text,
+          start: chunk.timestamp / 1000,
+          end: (chunk.timestamp / 1000) + chunk.duration,
+        }, detectedLang);
+
+        if (merged) {
+          await translateAndSend(merged, detectedLang);
+        }
+      },
+      chunkInterval: 5,
+    });
+
+  } catch (err) {
+    console.error('[SidePanel] Capture error:', err);
+    setStatus('error', err.message);
+    await stopCapture();
+  }
+}
+
+async function stopCapture() {
+  if (captureStream) {
+    captureStream.getTracks().forEach(t => t.stop());
+    captureStream = null;
+  }
+
+  await chrome.runtime.sendMessage({ type: 'CAPTURE_STOP' });
+
+  isCapturing = false;
+  $('captureBtn').innerHTML = '<span class="btn-icon">🎤</span><span class="btn-text">' + i18n.t('btn_capture_audio') + '</span>';
+  $('captureBtn').classList.remove('capturing');
+  $('captureInfo').classList.add('hidden');
+  $('modeOnline').classList.remove('active');
+}
+
+function onCaptureStopped() {
+  isCapturing = false;
+  $('captureBtn').innerHTML = '<span class="btn-icon">🎤</span><span class="btn-text">' + i18n.t('btn_capture_audio') + '</span>';
+  $('captureBtn').classList.remove('capturing');
+  $('captureInfo').classList.add('hidden');
+  $('modeOnline').classList.remove('active');
+}
+
+function toggleFullSpeed() {
+  fullSpeedMode = !fullSpeedMode;
+  $('fullSpeedToggle').classList.toggle('active', fullSpeedMode);
+}
+
+function onConfigUpdated(updates) {
+  if (updates.sourceLanguage !== undefined) {
+    $('sourceLang').value = updates.sourceLanguage;
+  }
+  if (updates.targetLanguage !== undefined) {
+    $('targetLang').value = updates.targetLanguage;
+  }
+}
+
+function onPlayerClosed() {
+}
+
+function setStatus(type, text) {
+  const badge = $('statusBadge');
+  badge.className = 'status-' + type;
+  $('statusText').textContent = text;
+}
+
+function showToast(msg) {
+  let el = document.getElementById('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#e74c3c;color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;font-size:14px;transition:opacity .3s;text-align:center;max-width:90%';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._hide);
+  el._hide = setTimeout(() => { el.style.opacity = '0'; }, 3000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
