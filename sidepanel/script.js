@@ -342,8 +342,28 @@ async function extractDirect(file) {
 
     video.src = blobUrl;
     await new Promise((resolve, reject) => {
-      video.addEventListener('loadedmetadata', resolve, { once: true });
-      video.addEventListener('error', () => reject(new Error('Cannot load this file')), { once: true });
+      let resolved = false;
+      const done = () => {
+        if (resolved) return;
+        if (video.duration && isFinite(video.duration) && video.duration > 0) {
+          resolved = true;
+          resolve();
+        }
+      };
+      video.addEventListener('loadedmetadata', done, { once: true });
+      video.addEventListener('durationchange', done, { once: true });
+      video.addEventListener('canplay', done, { once: true });
+      video.addEventListener('error', () => {
+        if (!resolved) reject(new Error('Cannot load this file'));
+      }, { once: true });
+      setTimeout(() => {
+        if (!resolved && video.duration && isFinite(video.duration) && video.duration > 0) {
+          resolved = true;
+          resolve();
+        } else if (!resolved) {
+          reject(new Error('Timed out waiting for media duration'));
+        }
+      }, 10000);
     });
 
     const duration = video.duration;
