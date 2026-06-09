@@ -26,6 +26,10 @@
   "option_auto_detect": { "message": "Auto Detect" },
   "option_tiny_model": { "message": "Whisper Tiny (75MB, Faster)" },
   "option_base_model": { "message": "Whisper Base (140MB, More Accurate)" },
+  "option_small_model": { "message": "Whisper Small (460MB, Better)" },
+  "option_medium_model": { "message": "Whisper Medium (1.5GB, High Quality)" },
+  "option_large_v3_model": { "message": "Whisper Large v3 (2.9GB, Best Quality)" },
+  "option_large_v3_turbo_model": { "message": "Whisper Turbo (1.6GB, Fast + Quality)" },
 
   "status_idle": { "message": "Ready" },
   "status_downloading_model": { "message": "Downloading model... {{progress}}%" },
@@ -67,6 +71,11 @@
 
   "btn_download_audio": { "message": "Download Audio (WAV)" },
   "btn_download_srt": { "message": "Download Subtitles (SRT)" },
+  "btn_download_translated": { "message": "Download Translated (SRT)" },
+
+  "btn_extract_audio": { "message": "Extract Audio" },
+  "btn_transcribe": { "message": "Transcribe" },
+  "btn_translate": { "message": "Translate" },
 
   "setting_section_general": { "message": "General" },
   "setting_section_asr": { "message": "Speech Recognition" },
@@ -84,6 +93,9 @@
   "setting_sliding_window_desc": { "message": "Number of previous sentences sent to AI for context-aware translation" },
   "setting_capture_interval": { "message": "Capture Interval (seconds)" },
 
+  "status_loading_whisper": { "message": "[1/2] Downloading speech model (Whisper)... {{progress}}%" },
+  "status_loading_translator": { "message": "[2/2] Loading translation engine..." },
+
   "msg_translation_engine": { "message": "Translation Engine" },
   "msg_engine_gemini": { "message": "Chrome Built-in AI (Gemini Nano)" },
   "msg_engine_onnx": { "message": "Local ONNX Model (NLLB-200)" },
@@ -92,5 +104,15 @@
   "msg_download_nllb": { "message": "Downloading translation model ({{size}}MB)..." },
 
   "time_just_now": { "message": "just now" },
-  "time_seconds_ago": { "message": "{{secs}}s ago" }
+  "time_seconds_ago": { "message": "{{secs}}s ago" },
+
+  "model_picker_title": { "message": "Select Whisper Model" },
+  "model_picker_desc": { "message": "Choose model size before downloading. Larger = more accurate but slower." },
+  "model_picker_confirm": { "message": "Download & Activate" },
+  "model_tiny_desc": { "message": "Fastest, lowest accuracy" },
+  "model_base_desc": { "message": "Good balance for most use" },
+  "model_small_desc": { "message": "Better accuracy, moderate speed" },
+  "model_medium_desc": { "message": "High quality, slower" },
+  "model_turbo_desc": { "message": "Fast + high quality (recommended)" },
+  "model_large_desc": { "message": "Best accuracy, slowest" }
 }

@@ -1,5 +1,7 @@
 import { isRtl } from './languages.js';
 
+const EOL = '\r\n';
+
 class SrtExporter {
   constructor() {
     this._segments = [];
@@ -77,7 +79,7 @@ class SrtExporter {
       lines.push('');
     }
 
-    return lines.join('\n');
+    return lines.join(EOL);
   }
 
   exportOriginalOnly() {
@@ -91,7 +93,7 @@ class SrtExporter {
       lines.push('');
     }
 
-    return lines.join('\n');
+    return lines.join(EOL);
   }
 
   exportTranslatedOnly() {
@@ -106,7 +108,7 @@ class SrtExporter {
       lines.push('');
     }
 
-    return lines.join('\n');
+    return lines.join(EOL);
   }
 
   async download(bilingual = true, sourceLang = null, targetLang = null, filename = null) {
@@ -123,8 +125,7 @@ class SrtExporter {
       filename = `Local_AI_Subtitle${ext}_${now}.srt`;
     }
 
-    const bom = '\uFEFF';
-    const blob = new Blob([bom + content], { type: 'text/srt;charset=utf-8;' });
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
 
     return new Promise((resolve, reject) => {

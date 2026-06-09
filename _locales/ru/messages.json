@@ -26,6 +26,10 @@
   "option_auto_detect": { "message": "Автоопределение" },
   "option_tiny_model": { "message": "Whisper Tiny (75 МБ, Быстро)" },
   "option_base_model": { "message": "Whisper Base (140 МБ, Точно)" },
+  "option_small_model": { "message": "Whisper Small (460 МБ, Лучше)" },
+  "option_medium_model": { "message": "Whisper Medium (1.5 ГБ, Высокое качество)" },
+  "option_large_v3_model": { "message": "Whisper Large v3 (2.9 ГБ, Лучшее качество)" },
+  "option_large_v3_turbo_model": { "message": "Whisper Turbo (1.6 ГБ, Быстро+Качество)" },
 
   "status_idle": { "message": "Готов" },
   "status_downloading_model": { "message": "Загрузка модели... {{progress}}%" },
@@ -82,5 +86,15 @@
   "msg_download_nllb": { "message": "Загрузка модели перевода ({{size}} МБ)..." },
 
   "time_just_now": { "message": "только что" },
-  "time_seconds_ago": { "message": "{{secs}}с назад" }
+  "time_seconds_ago": { "message": "{{secs}}с назад" },
+
+  "model_picker_title": { "message": "Выберите модель Whisper" },
+  "model_picker_desc": { "message": "Выберите размер модели перед загрузкой. Больше = точнее, но медленнее." },
+  "model_picker_confirm": { "message": "Загрузить и активировать" },
+  "model_tiny_desc": { "message": "Быстрее всего, низкая точность" },
+  "model_base_desc": { "message": "Хороший баланс для большинства задач" },
+  "model_small_desc": { "message": "Лучше точность, средняя скорость" },
+  "model_medium_desc": { "message": "Высокое качество, медленнее" },
+  "model_turbo_desc": { "message": "Быстро+качественно (рекомендуется)" },
+  "model_large_desc": { "message": "Лучшая точность, самый медленный" }
 }

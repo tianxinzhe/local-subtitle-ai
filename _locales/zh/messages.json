@@ -26,6 +26,10 @@
   "option_auto_detect": { "message": "自动检测" },
   "option_tiny_model": { "message": "Whisper Tiny (75MB, 更快)" },
   "option_base_model": { "message": "Whisper Base (140MB, 更准)" },
+  "option_small_model": { "message": "Whisper Small (460MB, 更佳)" },
+  "option_medium_model": { "message": "Whisper Medium (1.5GB, 高质量)" },
+  "option_large_v3_model": { "message": "Whisper Large v3 (2.9GB, 最佳质量)" },
+  "option_large_v3_turbo_model": { "message": "Whisper Turbo (1.6GB, 快速+质量)" },
 
   "status_idle": { "message": "就绪" },
   "status_downloading_model": { "message": "正在下载模型... {{progress}}%" },
@@ -67,6 +71,11 @@
 
   "btn_download_audio": { "message": "下载音频 (WAV)" },
   "btn_download_srt": { "message": "下载字幕 (SRT)" },
+  "btn_download_translated": { "message": "下载翻译后字幕 (SRT)" },
+
+  "btn_extract_audio": { "message": "提取音频" },
+  "btn_transcribe": { "message": "语音转文字" },
+  "btn_translate": { "message": "翻译" },
 
   "setting_section_general": { "message": "通用" },
   "setting_section_asr": { "message": "语音识别" },
@@ -84,6 +93,9 @@
   "setting_sliding_window_desc": { "message": "发送给 AI 的上下文句子数，用于语境感知翻译" },
   "setting_capture_interval": { "message": "捕获间隔（秒）" },
 
+  "status_loading_whisper": { "message": "[1/2] 正在下载语音模型 (Whisper)... {{progress}}%" },
+  "status_loading_translator": { "message": "[2/2] 正在加载翻译引擎..." },
+
   "msg_translation_engine": { "message": "翻译引擎" },
   "msg_engine_gemini": { "message": "Chrome 内置 AI (Gemini Nano)" },
   "msg_engine_onnx": { "message": "本地 ONNX 模型 (NLLB-200)" },
@@ -92,5 +104,15 @@
   "msg_download_nllb": { "message": "正在下载翻译模型 ({{size}}MB)..." },
 
   "time_just_now": { "message": "刚刚" },
-  "time_seconds_ago": { "message": "{{secs}}秒前" }
+  "time_seconds_ago": { "message": "{{secs}}秒前" },
+
+  "model_picker_title": { "message": "选择 Whisper 模型" },
+  "model_picker_desc": { "message": "在下载前选择模型大小。越大越准但越慢。" },
+  "model_picker_confirm": { "message": "下载并激活" },
+  "model_tiny_desc": { "message": "最快，精度最低" },
+  "model_base_desc": { "message": "适用于大多数场景" },
+  "model_small_desc": { "message": "更好精度，速度适中" },
+  "model_medium_desc": { "message": "高质量，较慢" },
+  "model_turbo_desc": { "message": "快速+高质量（推荐）" },
+  "model_large_desc": { "message": "最佳精度，最慢" }
 }

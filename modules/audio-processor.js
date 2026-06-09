@@ -9,20 +9,56 @@ class AudioProcessor {
 
   _getAudioContext() {
     if (!this._audioContext) {
-      this._audioContext = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: TARGET_SAMPLE_RATE,
-      });
+      this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
     }
     return this._audioContext;
   }
 
   async decodeAudioFile(file) {
+    console.log('[AudioProcessor] decodeAudioFile start:', file.name, file.size, 'bytes');
     const arrayBuffer = await file.arrayBuffer();
+    console.log('[AudioProcessor] arrayBuffer loaded:', arrayBuffer.byteLength, 'bytes');
     const audioContext = this._getAudioContext();
+    console.log('[AudioProcessor] AudioContext state:', audioContext.state, 'sampleRate:', audioContext.sampleRate);
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+      console.log('[AudioProcessor] AudioContext resumed, state:', audioContext.state);
+    }
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
+    console.log('[AudioProcessor] decodeAudioData done: duration=' + audioBuffer.duration.toFixed(2) + 's, sampleRate=' + audioBuffer.sampleRate + ', channels=' + audioBuffer.numberOfChannels + ', length=' + audioBuffer.length);
     const channelData = audioBuffer.getChannelData(0);
-    const resampled = this._resample(channelData, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
+    let maxAbs = 0;
+    for (let i = 0; i < channelData.length; i++) {
+      const abs = Math.abs(channelData[i]);
+      if (abs > maxAbs) maxAbs = abs;
+    }
+    console.log('[AudioProcessor] source audio max amplitude:', maxAbs.toFixed(6), 'at', audioBuffer.sampleRate + 'Hz');
+    
+    // If audio is very quiet (amplitude < 0.001), use all channels and sum them
+    if (maxAbs < 0.001 && audioBuffer.numberOfChannels > 1) {
+      console.log('[AudioProcessor] Audio very quiet, summing all', audioBuffer.numberOfChannels, 'channels');
+      let combined = new Float32Array(audioBuffer.length);
+      for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+        const ch = audioBuffer.getChannelData(c);
+        for (let i = 0; i < ch.length; i++) combined[i] += ch[i];
+      }
+      // Normalize by channel count
+      for (let i = 0; i < combined.length; i++) combined[i] /= audioBuffer.numberOfChannels;
+      
+      maxAbs = 0;
+      for (let i = 0; i < combined.length; i++) {
+        const abs = Math.abs(combined[i]);
+        if (abs > maxAbs) maxAbs = abs;
+      }
+      console.log('[AudioProcessor] After channel sum, max amplitude:', maxAbs.toFixed(6));
+      
+      const resampled = await this._resample(combined, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
+      console.log('[AudioProcessor] resample done: length=' + resampled.length);
+      return resampled;
+    }
+    
+    const resampled = await this._resample(channelData, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
+    console.log('[AudioProcessor] resample done: length=' + resampled.length + ', duration=' + (resampled.length / TARGET_SAMPLE_RATE).toFixed(2) + 's');
     return resampled;
   }
 
@@ -35,7 +71,7 @@ class AudioProcessor {
     const numSamples = Math.floor(durationSec * audioBuffer.sampleRate);
     const channelData = audioBuffer.getChannelData(0);
     const segment = channelData.slice(startSample, startSample + numSamples);
-    const resampled = this._resample(segment, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
+    const resampled = await this._resample(segment, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
     return resampled;
   }
 

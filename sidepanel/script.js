@@ -11,6 +11,8 @@ import { fileStore } from '../modules/file-store.js';
 
 let backgroundPort = null;
 let currentFile = null;
+let currentFileType = null; // 'video', 'audio', 'subtitle'
+let audioData = null;        // decoded Float32Array
 let isProcessing = false;
 let isAiReady = false;
 let isCapturing = false;
@@ -20,6 +22,32 @@ let captureStream = null;
 let captureAudioContext = null;
 
 const $ = (id) => document.getElementById(id);
+
+// Yield to the browser so it can paint pending DOM/style changes before we
+// run the next thread-blocking task (e.g. WASM Whisper inference). Two rAFs
+// guarantee a paint has been committed, with a setTimeout fallback in case
+// rAF is throttled (side panel backgrounded).
+function nextPaint() {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+    setTimeout(finish, 60);
+  });
+}
+
+// Update the extraction progress bar + status label in one place.
+function setExtractProgress(pct, statusText) {
+  const fillEl = $('extractFill');
+  if (fillEl) {
+    fillEl.style.setProperty('width', pct + '%', 'important');
+    fillEl.style.setProperty('display', 'block', 'important');
+  }
+  if (statusText !== undefined) {
+    const statusEl = $('extractStatus');
+    if (statusEl) statusEl.textContent = statusText;
+  }
+}
 
 function localizeHtml() {
   for (const el of document.querySelectorAll('[data-i18n]')) {
@@ -97,6 +125,11 @@ async function populateLanguageDropdowns() {
   }
 }
 
+function updateLangToggle() {
+  const lang = i18n.getCurrentLanguage();
+  $('langToggle').textContent = lang.toUpperCase();
+}
+
 async function loadSettings() {
   const config = await loadConfig();
 
@@ -108,6 +141,18 @@ async function loadSettings() {
   $('settingFontSize').value = config.subtitleFontSize || 18;
   $('settingFontColor').value = config.subtitleColor || '#FFD700';
   $('settingBgOpacity').value = config.subtitleBgOpacity || 0.6;
+
+  updateLangToggle();
+}
+
+function cycleUiLanguage() {
+  const langs = ['en', 'zh', 'ja', 'ko', 'fr', 'de', 'es', 'ru'];
+  const current = i18n.getCurrentLanguage();
+  const idx = langs.indexOf(current);
+  const next = langs[(idx + 1) % langs.length];
+  $('settingUiLang').value = next;
+  i18n.setLanguage(next);
+  location.reload();
 }
 
 function setModeCardsEnabled(enabled) {
@@ -118,6 +163,8 @@ function setModeCardsEnabled(enabled) {
 
 function setupEventListeners() {
   $('activateBtn').addEventListener('click', toggleAi);
+
+  $('langToggle').addEventListener('click', cycleUiLanguage);
 
   $('fileInput').addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
@@ -205,14 +252,6 @@ function setupEventListeners() {
     await saveConfig({ subtitleBgOpacity: parseFloat($('settingBgOpacity').value) });
   });
 
-  $('playBtn').addEventListener('click', () => {
-    if (currentFile) openPlayer(currentFile);
-  });
-
-  $('extractBtn').addEventListener('click', () => {
-    if (currentFile) extractDirect(currentFile);
-  });
-
   $('settingsPanel').addEventListener('click', (e) => {
     if (e.target === $('settingsPanel')) {
       $('settingsPanel').classList.add('hidden');
@@ -221,64 +260,128 @@ function setupEventListeners() {
 
   $('downloadAudioBtn').addEventListener('click', downloadExtractedAudio);
   $('downloadSrtBtn').addEventListener('click', downloadExtractedSrt);
+  $('downloadTranslatedBtn').addEventListener('click', downloadTranslatedSrt);
+
+  $('stepAudioBtn').addEventListener('click', () => {
+    if (currentFile && currentFileType === 'video' && !isExtracting) {
+      extractAudio(currentFile);
+    }
+  });
+  $('stepTranscribeBtn').addEventListener('click', () => {
+    if (audioData && !isExtracting) {
+      transcribeAudio();
+    }
+  });
+  $('stepTranslateBtn').addEventListener('click', () => {
+    if (srtExporter.getSegmentCount() > 0 && !isExtracting) {
+      translateSubtitles();
+    }
+  });
+
+  // Model picker confirm
+  $('pickerConfirmBtn').addEventListener('click', () => {
+    const selected = document.querySelector('input[name="pickerModel"]:checked');
+    if (selected) {
+      const model = selected.value;
+      $('settingAsrModel').value = model;
+      saveConfig({ asrModel: model });
+      showModelPicker(false);
+      doActivate(model);
+    }
+  });
+}
+
+function showModelPicker(show) {
+  $('modelPicker').classList.toggle('hidden', !show);
 }
 
 async function toggleAi() {
-  if (isAiReady) {
-    return;
-  }
+  if (isAiReady) return;
+
+  // Show model picker before loading
+  const config = await loadConfig();
+  const currentModel = config.asrModel || 'tiny';
+  const radio = document.querySelector(`input[name="pickerModel"][value="${currentModel}"]`);
+  if (radio) radio.checked = true;
+  showModelPicker(true);
+}
+
+async function doActivate(model) {
+  if (isAiReady) return;
 
   const btn = $('activateBtn');
   const progressContainer = $('progressContainer');
   const progressFill = $('progressFill');
   const progressLabel = $('progressLabel');
-  const statusBadge = $('statusBadge');
+  const whisperStatusEl = $('whisperStatus');
+  const translatorStatusEl = $('translatorStatus');
 
   btn.disabled = true;
   progressContainer.classList.remove('hidden');
-  statusBadge.className = 'status-loading';
-  $('statusText').textContent = i18n.t('status_downloading_model');
+
+  let whisperOk = false, translatorOk = false;
+
+  // Step 1: Load Whisper
+  whisperStatusEl.textContent = '...';
+  whisperStatusEl.className = 'model-status model-loading';
+  progressFill.style.width = '0%';
+  progressLabel.textContent = 'Whisper: 0%';
 
   try {
     await whisper.load({
+      model,
       onProgress: (pct, stage) => {
         progressFill.style.width = pct + '%';
-        progressLabel.textContent = pct + '%';
-
-        if (stage === 'downloading') {
-          $('statusText').textContent = i18n.t('status_downloading_model', { progress: pct });
-        } else if (stage === 'ready' || stage === 'loaded') {
-          $('statusText').textContent = i18n.t('status_model_ready');
-        }
+        progressLabel.textContent = `Whisper: ${pct}%`;
+        whisperStatusEl.textContent = `${pct}%`;
       },
     });
+    whisperOk = true;
+    whisperStatusEl.textContent = '✓ OK';
+    whisperStatusEl.className = 'model-status model-ready';
+  } catch (err) {
+    whisperStatusEl.textContent = '✗ Failed';
+    whisperStatusEl.className = 'model-status model-error';
+    console.error('[SidePanel] Whisper load failed:', err);
+  }
 
+  // Step 2: Load Translator (even if whisper failed)
+  translatorStatusEl.textContent = '...';
+  translatorStatusEl.className = 'model-status model-loading';
+  progressFill.style.width = '0%';
+  progressLabel.textContent = 'Translator: 0%';
+
+  try {
     await translator.init({
       onProgress: (pct, stage) => {
-        if (stage === 'gemini_ready') {
-          $('statusText').textContent = i18n.t('msg_engine_gemini');
-        } else if (stage === 'onnx_ready') {
-          $('statusText').textContent = i18n.t('msg_engine_onnx');
-        }
+        progressFill.style.width = pct + '%';
+        progressLabel.textContent = `Translator: ${pct}%`;
+        translatorStatusEl.textContent = `${pct}%`;
       },
     });
-
-    isAiReady = true;
-    btn.disabled = false;
-    progressContainer.classList.add('hidden');
-    statusBadge.className = 'status-ready';
-    $('statusText').textContent = i18n.t('status_model_ready');
-    setModeCardsEnabled(true);
+    translatorOk = true;
+    translatorStatusEl.textContent = '✓ OK';
+    translatorStatusEl.className = 'model-status model-ready';
   } catch (err) {
-    btn.disabled = false;
-    progressContainer.classList.add('hidden');
-    statusBadge.className = 'status-error';
-    $('statusText').textContent = i18n.t('status_model_failed');
-    console.error('[SidePanel] AI init failed:', err);
+    translatorStatusEl.textContent = '✗ Failed';
+    translatorStatusEl.className = 'model-status model-error';
+    console.error('[SidePanel] Translator load failed:', err);
+  }
+
+  // Done
+  btn.disabled = false;
+  progressContainer.classList.add('hidden');
+
+  if (whisperOk) {
+    isAiReady = true;
+    setModeCardsEnabled(true);
+  } else {
+    progressLabel.textContent = 'Whisper failed — extraction disabled';
   }
 }
 
 function handleFileDrop(file) {
+  console.log('[Step] handleFileDrop:', file.name, file.type, file.size);
   if (!isAiReady) {
     showToast('Please activate AI first');
     setStatus('error', 'Please activate AI first');
@@ -286,190 +389,325 @@ function handleFileDrop(file) {
   }
 
   currentFile = file;
-  $('dropText').textContent = file.name;
-  $('fileNameDisplay').textContent = file.name;
-  $('fileInfo').classList.remove('hidden');
-  $('fileActions').classList.remove('hidden');
-  $('extractProgress').classList.add('hidden');
-  $('modeLocal').classList.add('active');
-  setStatus('ready', i18n.t('status_idle'));
-}
-
-async function openPlayer(file, extractMode) {
-  await fileStore.save('pendingVideo', file);
-  await fileStore.save('pendingVideoName', file.name);
-  await fileStore.save('extractMode', !!extractMode);
-  const msg = { type: 'OPEN_PLAYER', fileName: file.name, fileSize: file.size, extractMode: !!extractMode };
-  if (backgroundPort) {
-    try { backgroundPort.postMessage(msg); return; } catch {}
-  }
-  try { await chrome.runtime.sendMessage(msg); } catch {}
-}
-
-async function extractDirect(file) {
-  $('fileActions').classList.add('hidden');
-  $('extractProgress').classList.remove('hidden');
-  $('extractBtn').disabled = true;
-  $('extractFill').style.width = '0%';
-  $('extractStatus').textContent = i18n.t('status_extracting_audio');
-
+  audioData = null;
   srtExporter.clear();
   sentenceMerger.reset?.();
   $('subtitleList').innerHTML = '<div id="emptyState" class="empty-state">No subtitles yet</div>';
   $('subtitleCount').textContent = '0';
+
+  // Detect file type
+  const name = file.name.toLowerCase();
+  const type = file.type;
+  if (name.endsWith('.srt') || name.endsWith('.ass') || name.endsWith('.vtt')) {
+    currentFileType = 'subtitle';
+  } else if (type.startsWith('audio/') || name.endsWith('.mp3') || name.endsWith('.wav') || name.endsWith('.flac') || name.endsWith('.ogg') || name.endsWith('.m4a') || name.endsWith('.aac')) {
+    currentFileType = 'audio';
+  } else {
+    currentFileType = 'video';
+  }
+
+  console.log('[Step] Detected type:', currentFileType);
+
+  $('dropText').textContent = file.name;
+  $('fileNameDisplay').textContent = file.name;
+  $('fileTypeBadge').textContent = currentFileType.toUpperCase();
+  $('fileInfo').classList.remove('hidden');
+  $('stepActions').classList.remove('hidden');
+  $('extractProgress').classList.add('hidden');
+  $('extractDownloads').classList.add('hidden');
+  $('modeLocal').classList.add('active');
+  updateStepButtons();
+  setStatus('ready', i18n.t('status_idle'));
+
+  // For subtitle files, load content directly
+  if (currentFileType === 'subtitle') {
+    loadSubtitleFile(file);
+  }
+  // For audio files, decode audio immediately (skip step 1)
+  if (currentFileType === 'audio') {
+    decodeAudioOnly(file);
+  }
+}
+
+function updateStepButtons() {
+  const audioBtn = $('stepAudioBtn');
+  const transcribeBtn = $('stepTranscribeBtn');
+  const translateBtn = $('stepTranslateBtn');
+
+  // Audio step: only for video files
+  if (currentFileType === 'video') {
+    audioBtn.className = audioData ? 'step-btn step-done' : 'step-btn';
+    audioBtn.disabled = false;
+  } else {
+    audioBtn.className = 'step-btn step-done';
+    audioBtn.disabled = true;
+    $('stepAudioStatus').textContent = '✓';
+  }
+
+  // Transcribe step: needs audio data + Whisper
+  if (audioData && whisper.isReady()) {
+    transcribeBtn.className = srtExporter.getSegmentCount() > 0 ? 'step-btn step-done' : 'step-btn';
+    transcribeBtn.disabled = false;
+  } else if (currentFileType === 'subtitle') {
+    transcribeBtn.className = 'step-btn step-done';
+    transcribeBtn.disabled = true;
+    $('stepTranscribeStatus').textContent = '✓';
+  } else {
+    transcribeBtn.className = 'step-btn step-disabled';
+    transcribeBtn.disabled = true;
+  }
+
+  // Translate step: needs subtitles + Translator
+  if (srtExporter.getSegmentCount() > 0 && hasTranslator()) {
+    translateBtn.className = 'step-btn';
+    translateBtn.disabled = false;
+  } else {
+    translateBtn.className = 'step-btn step-disabled';
+    translateBtn.disabled = true;
+  }
+}
+
+function hasTranslator() {
+  return translator.isReady?.() || false;
+}
+
+async function decodeAudioOnly(file) {
+  $('extractProgress').classList.remove('hidden');
+  $('extractStatus').textContent = 'Decoding audio...';
   isExtracting = true;
 
-  const audioChunks = [];
-  let hasAudio = false, hasSrt = false;
-  $('extractDownloads').classList.add('hidden');
-  $('downloadAudioBtn').disabled = true;
-  $('downloadSrtBtn').disabled = true;
+  try {
+    const raw = await audioProcessor.decodeAudioFile(file);
+    audioData = raw;
+    console.log('[Step] Audio decoded, amplitude:', getMaxAmplitude(raw).toFixed(6));
+    $('extractProgress').classList.add('hidden');
+    updateStepButtons();
+  } catch (err) {
+    console.error('[Step] Decode failed:', err);
+    $('extractStatus').textContent = 'Decode failed: ' + err.message;
+  }
+  isExtracting = false;
+}
 
-  const video = document.createElement('video');
-  video.muted = true;
-  video.playsInline = true;
-  video.style.display = 'none';
-  document.body.appendChild(video);
+async function loadSubtitleFile(file) {
+  $('extractProgress').classList.remove('hidden');
+  $('extractStatus').textContent = 'Loading subtitle file...';
+  try {
+    const text = await file.text();
+    const lines = text.split('\n');
+    // Simple SRT parse: look for timestamp patterns
+    let currentSeg = null;
+    for (let i = 0; i < lines.length; i++) {
+      const tl = lines[i].trim();
+      // Match timestamp line: 00:00:01,000 --> 00:00:04,000
+      const tsMatch = tl.match(/(\d{1,2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{3})/);
+      if (tsMatch) {
+        currentSeg = {
+          start: parseSrtTime(tsMatch[1]),
+          end: parseSrtTime(tsMatch[2]),
+          text: ''
+        };
+      } else if (tl && currentSeg && !/^\d+$/.test(tl)) {
+        currentSeg.text += (currentSeg.text ? '\n' : '') + tl;
+        if (i + 1 >= lines.length || lines[i + 1].trim() === '' || /^\d+$/.test(lines[i + 1].trim())) {
+          srtExporter.addSegment({
+            start: currentSeg.start,
+            end: currentSeg.end,
+            original: currentSeg.text.trim(),
+            translation: '',
+            detectedLanguage: null,
+          });
+          currentSeg = null;
+        }
+      }
+    }
+    $('subtitleList').innerHTML = '';
+    for (const seg of srtExporter.getSegments()) {
+      addSubtitleCard(seg.start, seg.original, '', false);
+    }
+    $('subtitleCount').textContent = srtExporter.getSegmentCount();
+    updateExportButton();
+    $('extractProgress').classList.add('hidden');
+    $('extractDownloads').classList.remove('hidden');
+    $('downloadSrtBtn').disabled = false;
+    updateStepButtons();
+  } catch (err) {
+    console.error('[Step] Subtitle load failed:', err);
+    $('extractStatus').textContent = 'Subtitle load failed: ' + err.message;
+  }
+}
 
-  let audioCtx = null;
-  const blobUrl = URL.createObjectURL(file);
+function parseSrtTime(str) {
+  const parts = str.replace(',', '.').split(':');
+  return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+}
+
+function getMaxAmplitude(arr) {
+  let max = 0;
+  for (let i = 0; i < arr.length; i++) {
+    const abs = Math.abs(arr[i]);
+    if (abs > max) max = abs;
+  }
+  return max;
+}
+
+async function extractAudio(file) {
+  console.log('[Step1] Starting audio extraction:', file.name);
+  isExtracting = true;
+  $('extractProgress').classList.remove('hidden');
+  $('stepAudioBtn').className = 'step-btn step-active';
+  $('stepAudioStatus').textContent = '...';
+  setExtractProgress(0, 'Decoding audio...');
 
   try {
-    const config = await loadConfig();
-    const sourceLang = config.sourceLanguage || 'auto';
-    const targetLang = config.targetLanguage || 'zh';
-    const doTranslate = !!targetLang && targetLang !== sourceLang;
+    const raw = await audioProcessor.decodeAudioFile(file);
+    const maxA = getMaxAmplitude(raw);
+    console.log('[Step1] Decoded, amplitude:', maxA.toFixed(6), 'samples:', raw.length);
 
-    video.src = blobUrl;
-    await new Promise((resolve, reject) => {
-      video.addEventListener('loadedmetadata', resolve, { once: true });
-      video.addEventListener('error', () => reject(new Error('Cannot load this file')), { once: true });
+    // Store clean audio for WAV export
+    audioData = raw;
+
+    setExtractProgress(100, 'Audio ready');
+    $('stepAudioBtn').className = 'step-btn step-done';
+    $('stepAudioStatus').textContent = '✓';
+    $('extractDownloads').classList.remove('hidden');
+    $('downloadAudioBtn').disabled = false;
+    window._extractedAudioChunks = [raw];
+
+    updateStepButtons();
+  } catch (err) {
+    console.error('[Step1] Failed:', err);
+    $('extractStatus').textContent = 'Error: ' + err.message;
+    $('stepAudioBtn').className = 'step-btn';
+    $('stepAudioStatus').textContent = '✗';
+  }
+  isExtracting = false;
+}
+
+async function transcribeAudio() {
+  if (!audioData) return;
+  console.log('[Step2] Starting transcription');
+  isExtracting = true;
+  $('extractProgress').classList.remove('hidden');
+  $('stepTranscribeBtn').className = 'step-btn step-active';
+  $('stepTranscribeStatus').textContent = '...';
+
+  // Clear previous subtitles
+  srtExporter.clear();
+  $('subtitleList').innerHTML = '<div id="emptyState" class="empty-state">No subtitles yet</div>';
+  $('subtitleCount').textContent = '0';
+  $('extractDownloads').classList.add('hidden');
+  $('downloadSrtBtn').disabled = true;
+  $('downloadTranslatedBtn').disabled = true;
+
+  const config = await loadConfig();
+  const sourceLang = config.sourceLanguage || 'auto';
+
+  srtExporter.clear();
+  $('subtitleList').innerHTML = '<div id="emptyState" class="empty-state">No subtitles yet</div>';
+  $('subtitleCount').textContent = '0';
+
+  try {
+    const segments = await whisper.transcribeAll(audioData, {
+      forceLanguage: sourceLang !== 'auto' ? sourceLang : null,
+    }, (pct, msg) => {
+      setExtractProgress(pct, msg);
+      if (isExtracting === false) throw new Error('Cancelled');
     });
 
-    // Use createMediaElementSource to tap directly into the decoded audio pipeline,
-    // avoiding captureStream() which may not capture audio for all format/codecs.
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-    const sourceNode = audioCtx.createMediaElementSource(video);
-    const destNode = audioCtx.createMediaStreamDestination();
-    sourceNode.connect(destNode);
+    if (!isExtracting) return;
 
-    const SEG = 15;
-    await video.play();
+    let added = 0;
+    $('extractDownloads').classList.remove('hidden');
+    $('downloadSrtBtn').disabled = false;
 
-    // Monitor video progress via timeupdate to detect when playback truly stalls.
-    let currentTimeAtEnd = 0;
-    const onTimeUpdate = () => { currentTimeAtEnd = video.currentTime; };
-    video.addEventListener('timeupdate', onTimeUpdate);
-
-    for (let segIdx = 0; isExtracting; segIdx++) {
-      const segStart = segIdx * SEG;
-
-      // Record one 15-second chunk from the live audio graph.
-      const webmBlob = await recordSegment(destNode.stream, SEG);
-      const segEnd = video.currentTime;
-
-      // If the video advanced less than 2 seconds during a 15-second recording
-      // window and we already have content, the video has reached its true end.
-      if (segEnd - segStart < 2 && segIdx > 0) break;
-
-      const audioData = await webmToFloat32(webmBlob);
-      audioChunks.push(audioData);
-      window._extractedAudioChunks = audioChunks;
-      if (!hasAudio) {
-        hasAudio = true;
-        $('extractDownloads').classList.remove('hidden');
-        $('downloadAudioBtn').disabled = false;
-      }
-
-      const result = await whisper.transcribe(audioData, {
-        returnTimestamps: true,
-        forceLanguage: sourceLang !== 'auto' ? sourceLang : null,
+    for (const seg of segments) {
+      if (!seg.text || !seg.text.trim()) continue;
+      srtExporter.addSegment({
+        start: seg.start,
+        end: seg.end,
+        original: seg.text.trim(),
+        translation: '',
+        detectedLanguage: seg.detectedLanguage,
       });
-
-      const detectedLang = result.detectedLanguage || sourceLang || 'en';
-
-      if (result.text && result.text.trim()) {
-        if (!hasSrt) { hasSrt = true; $('extractDownloads').classList.remove('hidden'); $('downloadSrtBtn').disabled = false; }
-        let translation = '';
-        if (doTranslate) {
-          try {
-            translation = await translator.translate(result.text, detectedLang, targetLang, []);
-          } catch (e) {
-            console.warn('[SidePanel] Translation failed, skipping:', e.message);
-          }
-        }
-        const segEndTime = (segIdx + 1) * SEG;
-        srtExporter.addSegment({
-          start: segStart,
-          end: segEndTime,
-          original: result.text.trim(),
-          translation,
-          detectedLanguage: detectedLang,
-        });
-        addSubtitleCard(segStart, result.text.trim(), translation, isRtl(detectedLang) || isRtl(targetLang));
-      }
-
-      // Show progress: we don't know total duration, so use currentTime as a proxy.
-      const progressTime = Math.max(segEnd, currentTimeAtEnd);
-      const shownPct = Math.min(100, Math.round((progressTime / (progressTime + 60)) * 100));
-      $('extractFill').style.width = shownPct + '%';
-      $('extractStatus').textContent = i18n.t('status_extracting_progress', { progress: shownPct });
+      addSubtitleCard(seg.start, seg.text.trim(), '', isRtl(seg.detectedLanguage));
+      added++;
     }
 
-    video.removeEventListener('timeupdate', onTimeUpdate);
-    video.pause();
-    onExtractDone(srtExporter.getSegmentCount());
-
-  } catch (err) {
-    console.error('[SidePanel] Extract error:', err);
-    $('extractStatus').textContent = 'Error: ' + err.message;
-    setStatus('error', err.message);
-    $('extractBtn').disabled = false;
-    isExtracting = false;
-  } finally {
-    if (audioCtx) audioCtx.close();
-    URL.revokeObjectURL(blobUrl);
-    if (video.parentNode) document.body.removeChild(video);
-  }
-}
-
-function recordSegment(stream, durationSec) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let rec;
-    try {
-      rec = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-    } catch (e) {
-      rec = new MediaRecorder(stream);
+    console.log('[Step2] Done, segments:', added);
+    setExtractProgress(100, `Transcribed ${added} segments`);
+  } catch (e) {
+    if (e.message === 'Cancelled') {
+      console.log('[Step2] Cancelled');
+    } else {
+      console.error('[Step2] Failed:', e);
+      setExtractProgress(0, 'Error');
     }
-    rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-    rec.onstop = () => resolve(new Blob(chunks, { type: 'audio/webm' }));
-    rec.onerror = (e) => reject(e.error || new Error('Recording failed'));
-    rec.start();
-    setTimeout(() => { if (rec.state === 'recording') rec.stop(); }, durationSec * 1000);
-  });
-}
-
-async function webmToFloat32(blob) {
-  const buf = await blob.arrayBuffer();
-  const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-  try {
-    const audioBuf = await ctx.decodeAudioData(buf);
-    const data = audioBuf.getChannelData(0);
-    return new Float32Array(data);
-  } finally {
-    ctx.close();
   }
-}
-
-function onExtractDone(count) {
-  isExtracting = false;
-  const c = typeof count === 'number' ? count : srtExporter.getSegmentCount();
-  $('extractFill').style.width = '100%';
-  $('extractStatus').textContent = i18n.t('status_extract_done', { count: c });
+  $('stepTranscribeBtn').className = 'step-btn step-done';
+  $('stepTranscribeStatus').textContent = '✓';
   updateExportButton();
-  setStatus('ready', i18n.t('status_idle'));
-  $('extractBtn').disabled = false;
+  updateStepButtons();
+  isExtracting = false;
+}
+
+async function translateSubtitles() {
+  const segments = srtExporter.getSegments();
+  if (!segments || segments.length === 0) return;
+  console.log('[Step3] Starting translation, segments:', segments.length);
+  isExtracting = true;
+  $('extractProgress').classList.remove('hidden');
+  $('stepTranslateBtn').className = 'step-btn step-active';
+  $('stepTranslateStatus').textContent = '...';
+
+  const config = await loadConfig();
+  const targetLang = config.targetLanguage || 'zh';
+  let translatedCount = 0;
+
+  for (let i = 0; i < segments.length && isExtracting; i++) {
+    const seg = segments[i];
+
+    // Skip if already in target language
+    if (seg.detectedLanguage === targetLang) {
+      seg.translation = ''; // No translation needed
+      translatedCount++;
+      continue;
+    }
+
+    const pct = Math.min(100, Math.round(i / segments.length * 100));
+    setExtractProgress(pct, `Translating ${i + 1}/${segments.length}`);
+    await nextPaint();
+
+    try {
+      const translation = await translator.translate(
+        seg.original,
+        seg.detectedLanguage || 'en',
+        targetLang,
+        []
+      );
+      seg.translation = translation || '';
+      if (translation) translatedCount++;
+    } catch (e) {
+      console.warn('[Step3] Segment', i + 1, 'translation failed:', e.message);
+    }
+  }
+
+  // Refresh UI cards to show translations
+  const list = $('subtitleList');
+  list.innerHTML = '';
+  for (const seg of segments) {
+    const rtl = isRtl(seg.detectedLanguage) || isRtl(targetLang);
+    addSubtitleCard(seg.start, seg.original, seg.translation, rtl);
+  }
+
+  console.log('[Step3] Done, translated:', translatedCount);
+  setExtractProgress(100, `Translated ${translatedCount} segments`);
+  $('stepTranslateBtn').className = 'step-btn step-done';
+  $('stepTranslateStatus').textContent = '✓';
+  $('downloadTranslatedBtn').disabled = false;
+  $('extractDownloads').classList.remove('hidden');
+  updateExportButton();
+  isExtracting = false;
 }
 
 async function handleAsrRequest(msg) {
@@ -709,7 +947,10 @@ function float32ToWavBlob(float32Array, sampleRate) {
 }
 
 function downloadExtractedAudio() {
-  if (!window._extractedAudioChunks || window._extractedAudioChunks.length === 0) return;
+  if (!window._extractedAudioChunks || window._extractedAudioChunks.length === 0) {
+    showToast('No extracted audio data available');
+    return;
+  }
   const totalLen = window._extractedAudioChunks.reduce((s, c) => s + c.length, 0);
   const combined = new Float32Array(totalLen);
   let offset = 0;
@@ -717,40 +958,92 @@ function downloadExtractedAudio() {
     combined.set(c, offset);
     offset += c.length;
   }
+
+  // Measure peak amplitude.
+  let maxAbs = 0;
+  for (let i = 0; i < combined.length; i++) {
+    const abs = Math.abs(combined[i]);
+    if (abs > maxAbs) maxAbs = abs;
+  }
+  console.log('[Download] WAV raw max amplitude:', maxAbs.toFixed(6), 'samples:', combined.length);
+
+  // Simple, non-destructive peak normalization to -1 dBFS (~0.89). We do NOT
+  // apply a noise gate here: the previous gate zeroed every sample below
+  // RMS*0.3, which mangled the speech waveform and produced silent/garbled
+  // exports. We only scale the whole signal uniformly so it stays faithful
+  // to the source audio. Skip if already near full scale or effectively
+  // silent.
+  if (maxAbs > 0.000001 && maxAbs < 0.89) {
+    const gain = 0.89 / maxAbs;
+    for (let i = 0; i < combined.length; i++) combined[i] *= gain;
+    console.log('[Download] Applied normalization gain:', gain.toFixed(2), '-> peak ~0.89');
+  } else {
+    console.log('[Download] No normalization applied (peak already', maxAbs.toFixed(4) + ')');
+  }
+
   const blob = float32ToWavBlob(combined, 16000);
   const url = URL.createObjectURL(blob);
   const name = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') + '_audio.wav' : 'extracted_audio.wav';
-  try {
-    chrome.downloads.download({ url, filename: name, saveAs: true }, () => {
-      URL.revokeObjectURL(url);
-    });
-  } catch {
-    const a = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
+  chrome.downloads.download({ url, filename: name, saveAs: true }, (downloadId) => {
+    if (chrome.runtime.lastError) {
+      console.error('[SidePanel] Download failed:', chrome.runtime.lastError.message);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } else {
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+  });
 }
 
 function downloadExtractedSrt() {
-  if (srtExporter.getSegmentCount() === 0) return;
+  if (srtExporter.getSegmentCount() === 0) {
+    showToast('No subtitles to export');
+    return;
+  }
   const content = srtExporter.exportOriginalOnly();
   const bom = '\uFEFF';
   const blob = new Blob([bom + content], { type: 'text/srt;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const name = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') + '_original.srt' : 'subtitles_original.srt';
-  try {
-    chrome.downloads.download({ url, filename: name, saveAs: true }, () => {
-      URL.revokeObjectURL(url);
-    });
-  } catch {
-    const a = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  chrome.downloads.download({ url, filename: name, saveAs: true }, (downloadId) => {
+    if (chrome.runtime.lastError) {
+      console.error('[SidePanel] Download failed:', chrome.runtime.lastError.message);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } else {
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+  });
+}
+
+function downloadTranslatedSrt() {
+  if (srtExporter.getSegmentCount() === 0) {
+    showToast('No translated subtitles to export');
+    return;
   }
+  const content = srtExporter.exportBilingual();
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + content], { type: 'text/srt;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const name = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') + '_bilingual.srt' : 'subtitles_bilingual.srt';
+  chrome.downloads.download({ url, filename: name, saveAs: true }, (downloadId) => {
+    if (chrome.runtime.lastError) {
+      console.error('[SidePanel] Download failed:', chrome.runtime.lastError.message);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } else {
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+  });
 }
 
 async function toggleCapture() {
@@ -887,9 +1180,7 @@ function onPlayerClosed() {
 }
 
 function setStatus(type, text) {
-  const badge = $('statusBadge');
-  badge.className = 'status-' + type;
-  $('statusText').textContent = text;
+  console.log('[Status]', type, text);
 }
 
 function showToast(msg) {

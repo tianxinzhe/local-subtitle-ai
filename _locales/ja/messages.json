@@ -26,6 +26,10 @@
   "option_auto_detect": { "message": "自動検出" },
   "option_tiny_model": { "message": "Whisper Tiny (75MB, 高速)" },
   "option_base_model": { "message": "Whisper Base (140MB, 高精度)" },
+  "option_small_model": { "message": "Whisper Small (460MB, 良好)" },
+  "option_medium_model": { "message": "Whisper Medium (1.5GB, 高品質)" },
+  "option_large_v3_model": { "message": "Whisper Large v3 (2.9GB, 最高品質)" },
+  "option_large_v3_turbo_model": { "message": "Whisper Turbo (1.6GB, 高速+品質)" },
 
   "status_idle": { "message": "準備完了" },
   "status_downloading_model": { "message": "モデルをダウンロード中... {{progress}}%" },
@@ -82,5 +86,15 @@
   "msg_download_nllb": { "message": "翻訳モデルをダウンロード中（{{size}}MB）..." },
 
   "time_just_now": { "message": "たった今" },
-  "time_seconds_ago": { "message": "{{secs}}秒前" }
+  "time_seconds_ago": { "message": "{{secs}}秒前" },
+
+  "model_picker_title": { "message": "Whisperモデルを選択" },
+  "model_picker_desc": { "message": "ダウンロード前にモデルサイズを選択。大きいほど高精度ですが低速。" },
+  "model_picker_confirm": { "message": "ダウンロードして起動" },
+  "model_tiny_desc": { "message": "最速、精度最低" },
+  "model_base_desc": { "message": "ほとんどの用途に適切" },
+  "model_small_desc": { "message": "良好な精度、適度な速度" },
+  "model_medium_desc": { "message": "高品質、低速" },
+  "model_turbo_desc": { "message": "高速+高品質（推奨）" },
+  "model_large_desc": { "message": "最高精度、最遅" }
 }

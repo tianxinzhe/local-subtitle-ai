@@ -26,6 +26,10 @@
   "option_auto_detect": { "message": "Detección automática" },
   "option_tiny_model": { "message": "Whisper Tiny (75 MB, Rápido)" },
   "option_base_model": { "message": "Whisper Base (140 MB, Preciso)" },
+  "option_small_model": { "message": "Whisper Small (460 MB, Mejor)" },
+  "option_medium_model": { "message": "Whisper Medium (1.5 GB, Alta calidad)" },
+  "option_large_v3_model": { "message": "Whisper Large v3 (2.9 GB, Mejor calidad)" },
+  "option_large_v3_turbo_model": { "message": "Whisper Turbo (1.6 GB, Rápido+Calidad)" },
 
   "status_idle": { "message": "Listo" },
   "status_downloading_model": { "message": "Descargando modelo... {{progress}}%" },
@@ -82,5 +86,15 @@
   "msg_download_nllb": { "message": "Descargando modelo de traducción ({{size}} MB)..." },
 
   "time_just_now": { "message": "justo ahora" },
-  "time_seconds_ago": { "message": "hace {{secs}}s" }
+  "time_seconds_ago": { "message": "hace {{secs}}s" },
+
+  "model_picker_title": { "message": "Seleccionar modelo Whisper" },
+  "model_picker_desc": { "message": "Elija el tamaño del modelo antes de descargar. Más grande = más preciso pero más lento." },
+  "model_picker_confirm": { "message": "Descargar y activar" },
+  "model_tiny_desc": { "message": "Más rápido, menor precisión" },
+  "model_base_desc": { "message": "Buen equilibrio para la mayoría de usos" },
+  "model_small_desc": { "message": "Mejor precisión, velocidad moderada" },
+  "model_medium_desc": { "message": "Alta calidad, más lento" },
+  "model_turbo_desc": { "message": "Rápido + alta calidad (recomendado)" },
+  "model_large_desc": { "message": "Mejor precisión, más lento" }
 }

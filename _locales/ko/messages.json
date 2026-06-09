@@ -26,6 +26,10 @@
   "option_auto_detect": { "message": "자동 감지" },
   "option_tiny_model": { "message": "Whisper Tiny (75MB, 빠름)" },
   "option_base_model": { "message": "Whisper Base (140MB, 정확)" },
+  "option_small_model": { "message": "Whisper Small (460MB, 양호)" },
+  "option_medium_model": { "message": "Whisper Medium (1.5GB, 고품질)" },
+  "option_large_v3_model": { "message": "Whisper Large v3 (2.9GB, 최고 품질)" },
+  "option_large_v3_turbo_model": { "message": "Whisper Turbo (1.6GB, 빠름+품질)" },
 
   "status_idle": { "message": "준비" },
   "status_downloading_model": { "message": "모델 다운로드 중... {{progress}}%" },
@@ -82,5 +86,15 @@
   "msg_download_nllb": { "message": "번역 모델 다운로드 중 ({{size}}MB)..." },
 
   "time_just_now": { "message": "방금" },
-  "time_seconds_ago": { "message": "{{secs}}초 전" }
+  "time_seconds_ago": { "message": "{{secs}}초 전" },
+
+  "model_picker_title": { "message": "Whisper 모델 선택" },
+  "model_picker_desc": { "message": "다운로드 전에 모델 크기를 선택하세요. 클수록 정확하지만 느립니다." },
+  "model_picker_confirm": { "message": "다운로드 및 활성화" },
+  "model_tiny_desc": { "message": "가장 빠름, 정확도 낮음" },
+  "model_base_desc": { "message": "대부분의 용도에 적합" },
+  "model_small_desc": { "message": "더 나은 정확도, 적당한 속도" },
+  "model_medium_desc": { "message": "고품질, 느림" },
+  "model_turbo_desc": { "message": "빠름+고품질 (권장)" },
+  "model_large_desc": { "message": "최고 정확도, 가장 느림" }
 }

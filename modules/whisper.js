@@ -5,11 +5,19 @@ import { pipeline as hfPipeline, env } from '@huggingface/transformers';
 const MODEL_REPO = {
   tiny: 'Xenova/whisper-tiny',
   base: 'Xenova/whisper-base',
+  small: 'Xenova/whisper-small',
+  medium: 'Xenova/whisper-medium',
+  'large-v3': 'Xenova/whisper-large-v3',
+  'large-v3-turbo': 'Xenova/whisper-large-v3-turbo',
 };
 
 const MODEL_VERSION = {
   tiny: '1.0.0',
   base: '1.0.0',
+  small: '1.0.0',
+  medium: '1.0.0',
+  'large-v3': '1.0.0',
+  'large-v3-turbo': '1.0.0',
 };
 
 let pipeline = null;
@@ -45,14 +53,28 @@ class WhisperEngine {
         onProgress(50, 'cached');
       }
 
+      const fileProgress = new Map();
       this._pipeline = await hfPipeline('automatic-speech-recognition', modelId, {
         dtype: 'q8',
         session_options: {
           graphOptimizationLevel: 'disabled',
         },
         progress_callback: (progress) => {
-          if (progress.status === 'progress') {
-            const pct = Math.round((progress.loaded / progress.total) * 100);
+          if (progress.status === 'progress' && progress.name) {
+            fileProgress.set(progress.name, { loaded: progress.loaded, total: progress.total });
+            const totalFiles = fileProgress.size;
+            let completedCount = 0;
+            let isCurrentFileReady = false;
+            for (const [name, f] of fileProgress) {
+              if (f.total > 0 && f.loaded >= f.total) {
+                completedCount++;
+                if (name === progress.name) isCurrentFileReady = true;
+              }
+            }
+            const current = fileProgress.get(progress.name);
+            const currentPct = current.total > 0 ? (current.loaded / current.total) : 0;
+            const completedWeight = isCurrentFileReady ? completedCount : (completedCount + currentPct);
+            const pct = Math.min(100, Math.round((completedWeight / totalFiles) * 100));
             onProgress(pct, 'downloading');
           } else if (progress.status === 'ready') {
             onProgress(100, 'ready');
@@ -84,6 +106,14 @@ class WhisperEngine {
 
     const language = options.language || null;
     const forceLanguage = options.forceLanguage || null;
+    console.log('[Whisper] transcribe input:', {
+      type: typeof audioFloat32Array,
+      isFloat32: audioFloat32Array instanceof Float32Array,
+      length: audioFloat32Array.length,
+      duration: audioFloat32Array.length / 16000,
+      ready: this._ready,
+      pipeline: !!this._pipeline,
+    });
 
     let input = audioFloat32Array;
     if (!(input instanceof Float32Array)) {
@@ -95,6 +125,7 @@ class WhisperEngine {
         input = Float32Array.from(input);
       }
     }
+    console.log('[Whisper] final input type:', input.constructor?.name, 'length:', input.length);
 
     const pipelineOptions = {
       return_timestamps: options.returnTimestamps || false,
@@ -103,16 +134,21 @@ class WhisperEngine {
     };
 
     if (forceLanguage) {
+      pipelineOptions.language = forceLanguage;
       pipelineOptions.forced_decoder_ids = this._pipeline.tokenizer
         .encode(`<|${forceLanguage}|>`)
         .map(id => [1, id]);
-    }
-
-    if (language) {
+    } else if (language) {
       pipelineOptions.language = language;
     }
+    // Neither forceLanguage nor language → let Whisper freely auto-detect
 
+    console.log('[Whisper] pipelineOptions:', { return_timestamps: pipelineOptions.return_timestamps, chunk_length_s: pipelineOptions.chunk_length_s, stride_length_s: pipelineOptions.stride_length_s, hasForcedIds: !!pipelineOptions.forced_decoder_ids });
+
+    console.log('[Whisper] Calling pipeline...');
+    const startTime = Date.now();
     const result = await this._pipeline(input, pipelineOptions);
+    console.log('[Whisper] Pipeline done in', ((Date.now() - startTime) / 1000).toFixed(1) + 's');
 
     let detectedLanguage = null;
     if (result.chunks && result.chunks.length > 0) {
@@ -177,5 +213,377 @@ class WhisperEngine {
   }
 }
 
-export const whisper = new WhisperEngine();
-export { MODEL_REPO, MODEL_VERSION };
+class WhisperWorkerEngine {
+  constructor() {
+    this._fallback = null;
+    this._workers = [];
+    this._ready = false;
+    this._modelType = null;
+    this._msgId = 0;
+    this._pending = new Map();
+    this._usingWorker = false;
+  }
+
+  _workerCount(model) {
+    // Use deviceMemory API if available (Chrome-only, returns GB)
+    const memGB = navigator.deviceMemory || 8;
+    const cpuCores = navigator.hardwareConcurrency || 4;
+    // Conservative: at most 2 workers, and only if enough RAM per model copy
+    const perWorkerMB = { tiny: 150, base: 250, small: 500, medium: 900, 'large-v3-turbo': 1200, 'large-v3': 1800 };
+    const perWorker = perWorkerMB[model] || 300;
+    const maxByMem = Math.max(1, Math.floor((memGB * 1024 * 0.6) / perWorker));
+    const maxByCpu = Math.max(1, Math.floor(cpuCores * 0.5));
+    return Math.min(maxByMem, maxByCpu, 3);
+  }
+
+  async load(options = {}) {
+    const model = options.model || await get('asrModel') || 'tiny';
+    const onProgress = options.onProgress || (() => {});
+
+    if (this._ready && this._modelType === model) return;
+
+    this._ready = false;
+    this._modelType = model;
+
+    const count = this._workerCount(model);
+    console.log(`[Whisper] Starting ${count} workers for model ${model}`);
+
+    // Track per-worker progress for smooth aggregated reporting
+    const workerProgress = new Array(count).fill(null).map(() => ({ pct: 0, done: false }));
+
+    try {
+      // First worker: load model (downloads + caches)
+      const firstCb = (pct, stage) => {
+        workerProgress[0].pct = pct;
+        if (stage === 'ready') workerProgress[0].done = true;
+        // First worker's progress = overall progress
+        onProgress(pct, stage);
+      };
+      await this._initWorker(model, firstCb);
+      workerProgress[0].pct = 100;
+      workerProgress[0].done = true;
+
+      // Remaining workers: load from cache in parallel
+      const restPromises = [];
+      for (let i = 1; i < count; i++) {
+        const idx = i;
+        restPromises.push(this._initWorker(model, (pct, stage) => {
+          workerProgress[idx].pct = pct;
+          if (stage === 'ready') workerProgress[idx].done = true;
+          const totalPct = Math.round(workerProgress.reduce((s, w) => s + w.pct, 0) / count);
+          onProgress(totalPct, stage);
+        }));
+      }
+      if (restPromises.length > 0) {
+        await Promise.all(restPromises);
+      }
+
+      this._ready = true;
+      this._usingWorker = true;
+      console.log(`[Whisper] ${count} workers ready`);
+      return;
+    } catch (err) {
+      console.warn('[Whisper] Workers failed, fallback to direct:', err.message);
+      this._terminateWorkers();
+    }
+
+    if (!this._fallback) this._fallback = new WhisperEngine();
+    await this._fallback.load(options);
+    this._ready = true;
+  }
+
+  async _initWorker(model, onProgress) {
+    const workerUrl = chrome.runtime.getURL('modules/whisper-worker.js');
+    const wasmPaths = chrome.runtime.getURL('libs/');
+
+    const worker = new Worker(workerUrl, { type: 'module' });
+    const idx = this._workers.length;
+    this._workers.push(worker);
+
+    const fileProgress = new Map();
+
+    // Handle worker crash: reject all pending messages for this worker
+    worker.onerror = (err) => {
+      console.error(`[Whisper] Worker ${idx} crashed:`, err.message);
+      for (const [msgId, pending] of this._pending) {
+        if (pending.workerIdx === idx) {
+          this._pending.delete(msgId);
+          pending.reject(new Error(`Worker ${idx} crashed: ${err.message}`));
+        }
+      }
+    };
+    worker.onmessageerror = () => {
+      console.error(`[Whisper] Worker ${idx} message error`);
+      for (const [msgId, pending] of this._pending) {
+        if (pending.workerIdx === idx) {
+          this._pending.delete(msgId);
+          pending.reject(new Error(`Worker ${idx} message error`));
+        }
+      }
+    };
+
+    worker.addEventListener('message', (e) => {
+      const { msgId, type, payload } = e.data;
+      const pending = this._pending.get(msgId);
+      if (!pending) return;
+
+      if (type === 'loadProgress') {
+        if (payload.status === 'progress' && payload.name) {
+          fileProgress.set(payload.name, { loaded: payload.loaded, total: payload.total });
+          const totalFiles = fileProgress.size;
+          let completedCount = 0;
+          for (const [, f] of fileProgress) {
+            if (f.total > 0 && f.loaded >= f.total) completedCount++;
+          }
+          const current = fileProgress.get(payload.name);
+          const currentPct = current.total > 0 ? (current.loaded / current.total) : 0;
+          const isCurrentFileReady = current.loaded >= current.total;
+          const completedWeight = isCurrentFileReady ? completedCount : (completedCount + currentPct);
+          const pct = Math.min(100, Math.round((completedWeight / totalFiles) * 100));
+          onProgress(pct, 'downloading');
+        } else if (payload.status === 'ready') {
+          onProgress(100, 'ready');
+        }
+        return;
+      }
+
+      this._pending.delete(msgId);
+
+      if (type === 'loaded') {
+        pending.resolve();
+      } else if (type === 'transcribeResult') {
+        pending.resolve(payload);
+      } else if (type === 'error') {
+        pending.reject(new Error(payload.message));
+      } else if (type === 'unloaded') {
+        pending.resolve();
+      }
+    });
+
+    await this._sendTo(idx, 'load', { wasmPaths, model });
+  }
+
+  _sendTo(workerIdx, type, payload, transfer, timeoutMs = 0) {
+    return new Promise((resolve, reject) => {
+      const msgId = ++this._msgId;
+      this._pending.set(msgId, { resolve, reject, workerIdx });
+      const msg = { msgId, type, payload };
+      const worker = this._workers[workerIdx];
+      if (transfer) {
+        worker.postMessage(msg, transfer);
+      } else {
+        worker.postMessage(msg);
+      }
+      if (timeoutMs > 0) {
+        setTimeout(() => {
+          if (this._pending.has(msgId)) {
+            this._pending.delete(msgId);
+            console.warn(`[Whisper] Timeout (${timeoutMs}ms) for msg ${msgId} to worker ${workerIdx}`);
+            reject(new Error(`Timeout after ${timeoutMs}ms`));
+          }
+        }, timeoutMs);
+      }
+    });
+  }
+
+  async transcribeAll(audioFloat32Array, options = {}, onProgress) {
+    if (this._usingWorker && this._workers.length > 0) {
+      return this._transcribeAllViaWorkers(audioFloat32Array, options, onProgress);
+    }
+    // Fallback: use single sequential transcribe
+    if (!this._fallback) throw new Error('Not loaded');
+    const result = await this._fallback.transcribe(audioFloat32Array, { ...options, returnTimestamps: true });
+    const chunks = result.chunks || [];
+    const segments = [];
+    for (const c of chunks) {
+      if (!c.text || !c.text.trim()) continue;
+      const [ts, te] = c.timestamp || [0, 0];
+      segments.push({
+        start: ts,
+        end: te || ts + 2,
+        text: c.text.trim(),
+        detectedLanguage: result.detectedLanguage || options.forceLanguage || 'en',
+      });
+    }
+    if (segments.length === 0 && result.text && result.text.trim()) {
+      segments.push({
+        start: 0,
+        end: audioFloat32Array.length / 16000,
+        text: result.text.trim(),
+        detectedLanguage: result.detectedLanguage || options.forceLanguage || 'en',
+      });
+    }
+    return segments;
+  }
+
+  async _transcribeAllViaWorkers(audioFloat32Array, options, onProgress) {
+    let input = audioFloat32Array;
+    if (!(input instanceof Float32Array)) {
+      if (input && input.array instanceof Float32Array) input = input.array;
+      else if (ArrayBuffer.isView(input)) input = new Float32Array(input.buffer, input.byteOffset, input.length);
+      else if (Array.isArray(input)) input = Float32Array.from(input);
+    }
+
+    const SAMPLE_RATE = 16000;
+    const CHUNK_SEC = 30;
+    const chunkSize = CHUNK_SEC * SAMPLE_RATE;
+    const totalChunks = Math.ceil(input.length / chunkSize);
+    const numWorkers = this._workers.length;
+
+    // Build chunk list
+    const chunks = [];
+    for (let offset = 0; offset < input.length; offset += chunkSize) {
+      const end = Math.min(offset + chunkSize, input.length);
+      chunks.push({
+        id: chunks.length,
+        data: input.slice(offset, end),
+        offsetSec: offset / SAMPLE_RATE,
+        durSec: (end - offset) / SAMPLE_RATE,
+      });
+    }
+
+    let completedChunks = 0;
+
+    // Assign chunks to workers round-robin, process sequentially per worker
+    const workerChains = Array.from({ length: numWorkers }, () => []);
+    chunks.forEach((chunk) => {
+      workerChains[chunk.id % numWorkers].push(chunk);
+    });
+
+    const workerPromises = workerChains.map((chain, workerIdx) => {
+      let chainPromise = Promise.resolve();
+      const results = [];
+      for (const chunk of chain) {
+        chainPromise = chainPromise.then(async () => {
+          try {
+            const res = await this._sendTo(workerIdx, 'transcribe', {
+              audio: chunk.data.buffer,
+              options: {
+                return_timestamps: true,
+                forceLanguage: options.forceLanguage || null,
+              },
+            }, [chunk.data.buffer], 120000);
+            completedChunks++;
+            if (onProgress) {
+              const pct = Math.round((completedChunks / totalChunks) * 100);
+              onProgress(pct, `Segment ${completedChunks}/${totalChunks}`);
+            }
+            results.push({ ...res, chunkId: chunk.id, chunkOffset: chunk.offsetSec, chunkDuration: chunk.durSec });
+          } catch (err) {
+            console.warn(`[Whisper] Chunk ${chunk.id}: worker ${workerIdx} failed:`, err.message);
+            completedChunks++;
+            if (onProgress) {
+              const pct = Math.round((completedChunks / totalChunks) * 100);
+              onProgress(pct, `Segment ${completedChunks}/${totalChunks} (failed)`);
+            }
+          }
+        });
+      }
+      return chainPromise.then(() => results);
+    });
+
+    const nestedResults = await Promise.all(workerPromises);
+    const results = nestedResults.flat();
+
+    // Sort by chunk id
+    results.sort((a, b) => a.chunkId - b.chunkId);
+
+    // Flatten into segments
+    const segments = [];
+    for (const res of results) {
+      const detectedLang = res.detectedLanguage || options.forceLanguage || 'en';
+      const rawChunks = res.chunks || [];
+      if (rawChunks.length > 0) {
+        for (const c of rawChunks) {
+          if (!c.text || !c.text.trim()) continue;
+          const [ts, te] = c.timestamp || [0, res.chunkDuration];
+          segments.push({
+            start: res.chunkOffset + ts,
+            end: res.chunkOffset + (te || ts + 2),
+            text: c.text.trim(),
+            detectedLanguage: detectedLang,
+          });
+        }
+      } else if (res.text && res.text.trim()) {
+        segments.push({
+          start: res.chunkOffset,
+          end: res.chunkOffset + res.chunkDuration,
+          text: res.text.trim(),
+          detectedLanguage: detectedLang,
+        });
+      }
+    }
+
+    return segments;
+  }
+
+  async transcribe(audioFloat32Array, options = {}) {
+    if (this._usingWorker && this._workers.length > 0) {
+      return this._transcribeViaWorker(audioFloat32Array, options);
+    }
+    if (!this._fallback) throw new Error('Not loaded');
+    return this._fallback.transcribe(audioFloat32Array, options);
+  }
+
+  async _transcribeViaWorker(audioFloat32Array, options = {}) {
+    let input = audioFloat32Array;
+    if (!(input instanceof Float32Array)) {
+      if (input && input.array instanceof Float32Array) input = input.array;
+      else if (ArrayBuffer.isView(input)) input = new Float32Array(input.buffer, input.byteOffset, input.length);
+      else if (Array.isArray(input)) input = Float32Array.from(input);
+    }
+
+    return this._sendTo(0, 'transcribe', {
+      audio: input.buffer,
+      options: {
+        return_timestamps: options.returnTimestamps,
+        chunk_length_s: options.chunkLength,
+        stride_length_s: options.strideLength,
+        forceLanguage: options.forceLanguage,
+        language: options.language,
+      },
+    }, [input.buffer]);
+  }
+
+  async transcribeChunked(audioFloat32Array, options = {}) {
+    if (this._usingWorker && this._workers.length > 0) {
+      const result = await this.transcribe(audioFloat32Array, { ...options, returnTimestamps: true });
+      return [{
+        index: 0,
+        text: result.text,
+        chunks: result.chunks || [],
+        detectedLanguage: result.detectedLanguage,
+        offset: 0,
+      }];
+    }
+    if (!this._fallback) throw new Error('Not loaded');
+    return this._fallback.transcribeChunked(audioFloat32Array, options);
+  }
+
+  isReady() { return this._ready; }
+
+  getModelType() { return this._modelType; }
+
+  async unload() {
+    this._terminateWorkers();
+    if (this._fallback) {
+      await this._fallback.unload();
+    }
+    this._ready = false;
+    this._modelType = null;
+    this._usingWorker = false;
+  }
+
+  _terminateWorkers() {
+    for (const w of this._workers) {
+      w.terminate();
+    }
+    this._workers = [];
+    this._pending.clear();
+    this._usingWorker = false;
+    this._ready = false;
+  }
+}
+
+export const whisper = new WhisperWorkerEngine();
+export { WhisperEngine, MODEL_REPO, MODEL_VERSION };

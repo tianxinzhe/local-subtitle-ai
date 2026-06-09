@@ -181,7 +181,8 @@ class Translator {
 
   async translate(text, sourceLang, targetLang, context = []) {
     if (!this._ready) {
-      throw new Error('Translation engine not initialized');
+      console.warn('[Translator] Engine not ready, returning original text');
+      return text;
     }
 
     if (!text || text.trim().length === 0) {
@@ -198,12 +199,21 @@ class Translator {
         if (supported && supported.includes(targetLang)) {
           return await this._translateViaGemini(text, sourceLang, targetLang, context);
         }
+        // Gemini doesn't support this language pair, try ONNX
+        if (this._onnxSession && this._nllbTokenizer) {
+          return await this._translateViaOnnx(text, sourceLang, targetLang, context);
+        }
+        console.warn('[Translator] No engine supports this language pair, returning original');
+        return text;
+      }
+      if (this._onnxSession && this._nllbTokenizer) {
         return await this._translateViaOnnx(text, sourceLang, targetLang, context);
       }
-      return await this._translateViaOnnx(text, sourceLang, targetLang, context);
+      console.warn('[Translator] ONNX model not loaded, returning original text');
+      return text;
     } catch (err) {
-      console.error('[Translator] translate failed:', err);
-      throw err;
+      console.warn('[Translator] translate failed, returning original:', err.message);
+      return text;
     }
   }
 
