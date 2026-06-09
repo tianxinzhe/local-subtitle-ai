@@ -1,17 +1,251 @@
 import { get, set } from './config.js';
+import { env } from '@huggingface/transformers';
 
-const GEMINI_SUPPORTED_PAIRS = {
-  en: ['zh', 'ja', 'ko', 'fr', 'de', 'es', 'pt', 'ru', 'ar', 'hi', 'th', 'vi', 'it', 'nl', 'pl', 'tr', 'id', 'ms'],
-};
+const HF_MIRROR = 'https://hf-mirror.com';
+const MODEL_ID = 'Xenova/m2m100_418M';
+
+class TranslationWorkerPool {
+  constructor() {
+    this._workers = [];
+    this._pending = new Map();
+    this._msgId = 0;
+    this._ready = false;
+  }
+
+  async init(onProgress) {
+    const numWorkers = this._workerCount();
+    console.log(`[Translator] Starting translation worker pool: ${numWorkers} workers`);
+    const workerUrl = chrome.runtime.getURL('modules/translate-worker.js');
+    const wasmPaths = chrome.runtime.getURL('libs/');
+
+    onProgress(5, `Starting ${numWorkers} worker(s)`);
+
+    this._workers = [];
+    for (let i = 0; i < numWorkers; i++) {
+      const worker = new Worker(workerUrl, { type: 'module' });
+      this._setupWorker(worker, i);
+      this._workers.push(worker);
+    }
+
+    // Set mirror for main-thread transformers.js (for any fallback imports)
+    env.remoteHost = HF_MIRROR;
+
+    // Load model on first worker (downloads + loads)
+    onProgress(10, 'Loading model (worker 1)');
+    await this._sendTo(0, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 300000);
+
+    // Remaining workers load from cache
+    for (let i = 1; i < this._workers.length; i++) {
+      onProgress(10 + Math.round(i / numWorkers * 80), `Loading model (worker ${i + 1})`);
+      await this._sendTo(i, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 300000);
+    }
+
+    this._ready = true;
+    onProgress(100, 'ready');
+  }
+
+  _workerCount() {
+    const cpuCores = navigator.hardwareConcurrency || 4;
+    return Math.min(Math.max(cpuCores - 1, 1), 3);
+  }
+
+  _setupWorker(worker, idx) {
+    worker.addEventListener('message', (e) => {
+      const { msgId, type, payload } = e.data;
+      const pending = this._pending.get(msgId);
+      if (!pending) return;
+
+      if (type === 'loadProgress') {
+        // Forward progress from first worker
+        return;
+      }
+
+      this._pending.delete(msgId);
+      if (type === 'loaded') {
+        pending.resolve();
+      } else if (type === 'translateResult') {
+        pending.resolve(payload);
+      } else if (type === 'error') {
+        pending.reject(new Error(payload.message));
+      }
+    });
+
+    worker.onerror = (err) => {
+      console.error(`[Translator] Worker ${idx} error:`, err);
+      for (const [msgId, pending] of this._pending) {
+        if (pending.workerIdx === idx) {
+          this._pending.delete(msgId);
+          pending.reject(new Error('Worker crashed'));
+        }
+      }
+    };
+  }
+
+  _sendTo(workerIdx, type, payload, timeoutMs = 60000) {
+    return new Promise((resolve, reject) => {
+      const msgId = ++this._msgId;
+      this._pending.set(msgId, { resolve, reject, workerIdx });
+
+      const timer = setTimeout(() => {
+        if (this._pending.has(msgId)) {
+          this._pending.delete(msgId);
+          reject(new Error(`Timeout (${timeoutMs}ms) for msg ${msgId} to worker ${workerIdx}`));
+        }
+      }, timeoutMs);
+
+      const origResolve = resolve;
+      this._pending.set(msgId, {
+        resolve: (val) => { clearTimeout(timer); origResolve(val); },
+        reject: (err) => { clearTimeout(timer); reject(err); },
+        workerIdx,
+      });
+
+      this._workers[workerIdx].postMessage({ msgId, type, payload });
+    });
+  }
+
+  async translate(text, srcLang, tgtLang) {
+    return this._sendTo(0, 'translate', { text, srcLang, tgtLang }, 120000);
+  }
+
+  async batchTranslate(segments, srcLang, tgtLang, onProgress) {
+    const SEP = '\n【=SEP=】\n';
+    const MAX_BATCH_CHARS = 5000;
+    const MAX_BATCH_SEGMENTS = 100;
+    const total = segments.length;
+    const numWorkers = this._workers.length;
+    const allBatches = [];
+
+    // Build batches
+    let i = 0;
+    while (i < total) {
+      const batch = [];
+      let charCount = 0;
+      while (i < total && charCount < MAX_BATCH_CHARS && batch.length < MAX_BATCH_SEGMENTS) {
+        const seg = segments[i];
+        batch.push(seg);
+        charCount += seg.original.length;
+        i++;
+      }
+      allBatches.push(batch);
+    }
+
+    // Assign batches to workers round-robin
+    const workerChains = Array.from({ length: numWorkers }, () => ({ batches: [], results: [] }));
+    allBatches.forEach((batch, idx) => {
+      workerChains[idx % numWorkers].batches.push(batch);
+    });
+
+    const workerPromises = workerChains.map((chain, workerIdx) => {
+      let chainPromise = Promise.resolve();
+      for (const batch of chain.batches) {
+        chainPromise = chainPromise.then(async () => {
+          const texts = batch.map(s => s.original);
+          const combined = texts.join(SEP);
+          try {
+            const res = await this._sendTo(workerIdx, 'translate', {
+              text: combined, srcLang, tgtLang,
+            }, 120000);
+            const parts = res.text.split(SEP);
+            for (let j = 0; j < batch.length; j++) {
+              chain.results.push({
+                ...batch[j],
+                translation: parts[j] ? parts[j].trim() : '',
+              });
+            }
+          } catch {
+            for (const seg of batch) {
+              chain.results.push({ ...seg, translation: '' });
+            }
+          }
+          if (onProgress) {
+            const done = workerChains.reduce((s, c) => s + c.results.length, 0);
+            onProgress(Math.min(100, Math.round(done / total * 100)));
+          }
+        });
+      }
+      return chainPromise;
+    });
+
+    await Promise.all(workerPromises);
+
+    // Flatten in original order
+    const results = [];
+    for (const chain of workerChains) {
+      for (const r of chain.results) {
+        results.push(r);
+      }
+    }
+    results.sort((a, b) => a.index - b.index);
+    return results;
+  }
+
+  isReady() { return this._ready; }
+  unload() {
+    for (const w of this._workers) w.terminate();
+    this._workers = [];
+    this._ready = false;
+  }
+}
+
+class GeminiEngine {
+  async _checkAvailable() {
+    try {
+      // Chrome 138+: window.Translator (new API)
+      if (typeof Translator !== 'undefined' && Translator.canTranslate) {
+        return true;
+      }
+      // Chrome 131-137: window.ai.translator (old API)
+      const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
+      if (ai && ai.translator) {
+        const caps = await ai.translator.capabilities();
+        return caps && caps.available !== 'no';
+      }
+      return false;
+    } catch { return false; }
+  }
+
+  async _canTranslate(source, target) {
+    try {
+      // Chrome 138+: window.Translator
+      if (typeof Translator !== 'undefined' && Translator.canTranslate) {
+        const r = await Translator.canTranslate({ sourceLanguage: source, targetLanguage: target });
+        return r === 'readily' || r === 'after-download';
+      }
+      // Chrome 131-137: window.ai.translator
+      const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
+      if (!ai || !ai.translator) return false;
+      const caps = await ai.translator.capabilities();
+      if (!caps || !caps.canTranslate) return false;
+      const r = await caps.canTranslate({ sourceLanguage: source, targetLanguage: target });
+      return r === 'readily' || r === 'after-download';
+    } catch { return false; }
+  }
+
+  async translate(text, sourceLang, targetLang) {
+    // Chrome 138+: window.Translator
+    if (typeof Translator !== 'undefined' && Translator.create) {
+      const t = await Translator.create({
+        sourceLanguage: sourceLang,
+        targetLanguage: targetLang,
+      });
+      return t.translate(text);
+    }
+    // Chrome 131-137: window.ai.translator
+    const t = await window.ai.translator.create({
+      sourceLanguage: sourceLang,
+      targetLanguage: targetLang,
+    });
+    return t.translate(text);
+  }
+}
 
 class Translator {
   constructor() {
+    this._gemini = new GeminiEngine();
+    this._workerPool = null;
     this._engine = null;
     this._ready = false;
-    this._fallbackReady = false;
-    this._onnxSession = null;
-    this._nllbTokenizer = null;
-    this._ort = null;
   }
 
   async init(options = {}) {
@@ -19,243 +253,87 @@ class Translator {
     this._ready = false;
 
     onProgress(0, 'checking');
+    const geminiOk = await this._gemini._checkAvailable();
 
-    const geminiAvailable = await this._checkGeminiNano();
-
-    if (geminiAvailable) {
+    if (geminiOk) {
       this._engine = 'gemini-nano';
       this._ready = true;
+      console.log('[Translator] Using engine: Gemini Nano');
       onProgress(100, 'gemini_ready');
       return;
     }
 
-    onProgress(50, 'downloading_fallback');
+    onProgress(5, 'setting_up_workers');
+    env.remoteHost = HF_MIRROR;
 
+    this._workerPool = new TranslationWorkerPool();
     try {
-      await this._loadOnnxFallback(onProgress);
-      this._engine = 'onnx-nllb';
+      await this._workerPool.init(onProgress);
+      this._engine = 'nllb';
       this._ready = true;
-      onProgress(100, 'onnx_ready');
+      const workerCount = this._workerPool._workers.length;
+      console.log(`[Translator] Using engine: M2M100-418M (${workerCount} workers)`);
+      onProgress(100, `nllb_${workerCount}workers`);
+      await set('nllbModelDownloaded', true);
     } catch (err) {
-      console.error('[Translator] Fallback load failed:', err);
+      console.error('[Translator] Worker pool init failed:', err);
       this._ready = false;
       throw new Error(`Translation engine unavailable: ${err.message}`);
     }
   }
 
-  async _checkGeminiNano() {
-    try {
-      if (typeof window !== 'undefined' && window.ai && window.ai.translator) {
-        const capabilities = await window.ai.translator.capabilities();
-        return capabilities && capabilities.available !== 'no';
-      }
-      if (typeof self !== 'undefined' && self.ai && self.ai.translator) {
-        const capabilities = await self.ai.translator.capabilities();
-        return capabilities && capabilities.available !== 'no';
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  }
-
-  async _loadOnnxFallback(onProgress) {
-    onProgress(60, 'loading_onnx');
-
-    const ortUrl = chrome.runtime.getURL(
-      'libs/ort.min.js'
-    );
-    this._ort = await import(ortUrl);
-
-    onProgress(70, 'loading_tokenizer');
-
-    try {
-      const tokenizerResp = await fetch(
-        chrome.runtime.getURL('models/nllb_tokenizer.json')
-      );
-      this._nllbTokenizer = await tokenizerResp.json();
-    } catch {
-      console.warn('[Translator] NLLB tokenizer not found, using fallback');
-    }
-
-    onProgress(80, 'loading_model');
-
-    try {
-      this._onnxSession = await this._ort.InferenceSession.create(
-        chrome.runtime.getURL('models/nllb-200-distilled-600m-int8.onnx'),
-        { executionProviders: ['wasm'], graphOptimizationLevel: 'all' }
-      );
-    } catch {
-      console.warn('[Translator] NLLB model not found, translation will be limited');
-    }
-
-    await set('nllbModelDownloaded', true);
-    onProgress(100, 'onnx_loaded');
-  }
-
-  async _translateViaGemini(text, sourceLang, targetLang, context) {
-    try {
-      const translator = await window.ai.translator.create({
-        sourceLanguage: sourceLang,
-        targetLanguage: targetLang,
-      });
-
-      let prompt = text;
-      if (context && context.length > 0) {
-        prompt = `Context: ${context.join(' ')}\nTranslate: ${text}`;
-      }
-
-      const result = await translator.translate(prompt);
-      return result;
-    } catch (err) {
-      console.error('[Translator] Gemini Nano failed:', err);
-      throw err;
-    }
-  }
-
-  async _translateViaOnnx(text, sourceLang, targetLang, context) {
-    if (!this._onnxSession || !this._nllbTokenizer) {
-      throw new Error('ONNX NLLB model not loaded');
-    }
-
-    const srcCode = this._toFloresCode(sourceLang);
-    const tgtCode = this._toFloresCode(targetLang);
-    const inputText = `${srcCode} >> ${tgtCode} >> ${text}`;
-
-    const tokens = this._tokenize(inputText);
-    const inputTensor = new this._ort.Tensor('int64', tokens, [1, tokens.length]);
-
-    const feeds = { input_ids: inputTensor };
-    const results = await this._onnxSession.run(feeds);
-    const outputTokens = results.output_ids.data;
-
-    const translation = this._detokenize(outputTokens);
-    return translation;
-  }
-
-  _toFloresCode(langCode) {
-    const map = {
-      en: 'eng_Latn', zh: 'zho_Hans', ja: 'jpn_Jpan', ko: 'kor_Hang',
-      fr: 'fra_Latn', de: 'deu_Latn', es: 'spa_Latn', pt: 'por_Latn',
-      ru: 'rus_Cyrl', ar: 'arb_Arab', hi: 'hin_Deva', th: 'tha_Thai',
-      vi: 'vie_Latn', it: 'ita_Latn', nl: 'nld_Latn', pl: 'pol_Latn',
-      tr: 'tur_Latn', id: 'ind_Latn', ms: 'msa_Latn', sv: 'swe_Latn',
-      da: 'dan_Latn', fi: 'fin_Latn', cs: 'ces_Latn', ro: 'ron_Latn',
-      uk: 'ukr_Cyrl', el: 'ell_Grek', he: 'heb_Hebr', bn: 'ben_Beng',
-      ta: 'tam_Taml', te: 'tel_Telu', mr: 'mar_Deva', ur: 'urd_Arab',
-      fa: 'pes_Arab', ne: 'npi_Deva', km: 'khm_Khmr', my: 'mya_Mymr',
-      lo: 'lao_Laoo', ka: 'kat_Geor', hy: 'hye_Armn', az: 'azj_Latn',
-      af: 'afr_Latn', sq: 'sqi_Latn', am: 'amh_Ethi', eu: 'eus_Latn',
-      be: 'bel_Cyrl', bs: 'bos_Latn', bg: 'bul_Cyrl', ca: 'cat_Latn',
-      hr: 'hrv_Latn', et: 'est_Latn', gl: 'glg_Latn', is: 'isl_Latn',
-      lv: 'lav_Latn', lt: 'lit_Latn', mk: 'mkd_Cyrl', mt: 'mlt_Latn',
-      mn: 'mon_Cyrl', sr: 'srp_Cyrl', sk: 'slk_Latn', sl: 'slv_Latn',
-      sw: 'swh_Latn', tg: 'tgk_Cyrl', uz: 'uzn_Latn', cy: 'cym_Latn',
-      yi: 'yid_Hebr', zu: 'zul_Latn', jw: 'jav_Latn', su: 'sun_Latn',
-      ml: 'mal_Mlym', kn: 'kan_Knda', gu: 'guj_Gujr', pa: 'pan_Guru',
-      or: 'ory_Orya', as: 'asm_Beng', si: 'sin_Sinh', kk: 'kaz_Cyrl',
-      ky: 'kir_Cyrl', tk: 'tuk_Latn', ps: 'pst_Arab', sd: 'snd_Arab',
-      ha: 'hau_Latn', yo: 'yor_Latn', ig: 'ibo_Latn', so: 'som_Latn',
-      ny: 'nya_Latn', mg: 'plt_Latn', eo: 'epo_Latn', la: 'lat_Latn',
-    };
-    return map[langCode] || `eng_Latn`;
-  }
-
-  _tokenize(text) {
-    if (this._nllbTokenizer && this._nllbTokenizer.encode) {
-      return this._nllbTokenizer.encode(text);
-    }
-    const tokens = [];
-    for (let i = 0; i < Math.min(text.length, 512); i++) {
-      tokens.push(text.charCodeAt(i));
-    }
-    return tokens;
-  }
-
-  _detokenize(tokens) {
-    if (this._nllbTokenizer && this._nllbTokenizer.decode) {
-      return this._nllbTokenizer.decode(tokens);
-    }
-    return String.fromCharCode(...tokens.filter(t => t > 0 && t < 0xFFFF));
-  }
-
   async translate(text, sourceLang, targetLang, context = []) {
-    if (!this._ready) {
-      console.warn('[Translator] Engine not ready, returning original text');
-      return text;
-    }
-
-    if (!text || text.trim().length === 0) {
-      return '';
-    }
-
-    if (sourceLang === targetLang) {
-      return text;
-    }
+    if (!this._ready) return text;
+    if (!text || !text.trim()) return '';
+    if (sourceLang === targetLang) return text;
 
     try {
       if (this._engine === 'gemini-nano') {
-        const supported = GEMINI_SUPPORTED_PAIRS[sourceLang];
-        if (supported && supported.includes(targetLang)) {
-          return await this._translateViaGemini(text, sourceLang, targetLang, context);
-        }
-        // Gemini doesn't support this language pair, try ONNX
-        if (this._onnxSession && this._nllbTokenizer) {
-          return await this._translateViaOnnx(text, sourceLang, targetLang, context);
-        }
-        console.warn('[Translator] No engine supports this language pair, returning original');
+        const ok = await this._gemini._canTranslate(sourceLang, targetLang);
+        if (ok) return this._gemini.translate(text, sourceLang, targetLang);
+        console.warn('[Translator] Gemini cannot translate this pair');
         return text;
       }
-      if (this._onnxSession && this._nllbTokenizer) {
-        return await this._translateViaOnnx(text, sourceLang, targetLang, context);
-      }
-      console.warn('[Translator] ONNX model not loaded, returning original text');
-      return text;
+      return this._workerPool.translate(text, sourceLang, targetLang);
     } catch (err) {
-      console.warn('[Translator] translate failed, returning original:', err.message);
+      console.warn('[Translator] translate failed:', err.message);
       return text;
     }
   }
 
-  async batchTranslate(segments, sourceLang, targetLang, contextBuilder) {
-    const results = [];
-    const context = [];
-
-    for (const seg of segments) {
-      let ctx = [];
-      if (contextBuilder) {
-        ctx = contextBuilder(context);
-      }
-
-      const translation = await this.translate(
-        seg.text,
-        sourceLang,
-        targetLang,
-        ctx
-      );
-
-      results.push({
-        ...seg,
-        translation,
-      });
-
-      context.push({ original: seg.text, translation });
-      if (context.length > 3) {
-        context.shift();
-      }
+  async batchTranslate(segments, sourceLang, targetLang, onProgress) {
+    if (!this._ready) return segments.map(s => ({ ...s, translation: '' }));
+    if (sourceLang === targetLang) {
+      console.log(`[Translator] Source == target (${sourceLang}), skipping translation`);
+      return segments.map(s => ({ ...s, translation: '' }));
     }
 
-    return results;
+    console.log(`[Translator] batchTranslate: ${segments.length} segs, ${sourceLang}→${targetLang}, engine=${this._engine}`);
+
+    try {
+      if (this._engine === 'gemini-nano') {
+        const ok = await this._gemini._canTranslate(sourceLang, targetLang);
+        if (ok) {
+          // Gemini: process sequentially (no worker pool)
+          const results = [];
+          for (let i = 0; i < segments.length; i++) {
+            const t = await this._gemini.translate(segments[i].original, sourceLang, targetLang);
+            results.push({ ...segments[i], translation: t || '' });
+            if (onProgress) onProgress(Math.round((i + 1) / segments.length * 100));
+          }
+          return results;
+        }
+        return segments.map(s => ({ ...s, translation: '' }));
+      }
+      return this._workerPool.batchTranslate(segments, sourceLang, targetLang, onProgress);
+    } catch (err) {
+      console.warn('[Translator] batchTranslate failed:', err.message);
+      return segments.map(s => ({ ...s, translation: '' }));
+    }
   }
 
-  getEngine() {
-    return this._engine;
-  }
-
-  isReady() {
-    return this._ready;
-  }
+  getEngine() { return this._engine; }
+  isReady() { return this._ready; }
 }
 
 export const translator = new Translator();
-export { GEMINI_SUPPORTED_PAIRS };

@@ -127,7 +127,7 @@ async function populateLanguageDropdowns() {
 
 function updateLangToggle() {
   const lang = i18n.getCurrentLanguage();
-  $('langToggle').textContent = lang.toUpperCase();
+  $('langToggle').value = lang;
 }
 
 async function loadSettings() {
@@ -145,16 +145,6 @@ async function loadSettings() {
   updateLangToggle();
 }
 
-function cycleUiLanguage() {
-  const langs = ['en', 'zh', 'ja', 'ko', 'fr', 'de', 'es', 'ru'];
-  const current = i18n.getCurrentLanguage();
-  const idx = langs.indexOf(current);
-  const next = langs[(idx + 1) % langs.length];
-  $('settingUiLang').value = next;
-  i18n.setLanguage(next);
-  location.reload();
-}
-
 function setModeCardsEnabled(enabled) {
   const cards = document.querySelectorAll('.mode-card');
   cards.forEach(c => c.classList.toggle('disabled', !enabled));
@@ -164,7 +154,12 @@ function setModeCardsEnabled(enabled) {
 function setupEventListeners() {
   $('activateBtn').addEventListener('click', toggleAi);
 
-  $('langToggle').addEventListener('click', cycleUiLanguage);
+  $('langToggle').addEventListener('change', async (e) => {
+    const lang = e.target.value;
+    $('settingUiLang').value = lang;
+    await i18n.setLanguage(lang);
+    location.reload();
+  });
 
   $('fileInput').addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
@@ -351,16 +346,24 @@ async function doActivate(model) {
   progressFill.style.width = '0%';
   progressLabel.textContent = 'Translator: 0%';
 
+  let finalStage = '';
   try {
     await translator.init({
       onProgress: (pct, stage) => {
         progressFill.style.width = pct + '%';
         progressLabel.textContent = `Translator: ${pct}%`;
         translatorStatusEl.textContent = `${pct}%`;
+        if (pct >= 100) finalStage = stage;
       },
     });
     translatorOk = true;
-    translatorStatusEl.textContent = '✓ OK';
+    const engineLabels = {
+      'gemini_ready': '✓ Gemini Nano',
+      'nllb_1workers': '✓ M2M100 (1 worker)',
+      'nllb_2workers': '✓ M2M100 (2 workers)',
+      'nllb_3workers': '✓ M2M100 (3 workers)',
+    };
+    translatorStatusEl.textContent = engineLabels[finalStage] || '✓ OK';
     translatorStatusEl.className = 'model-status model-ready';
   } catch (err) {
     translatorStatusEl.textContent = '✗ Failed';
@@ -662,40 +665,30 @@ async function translateSubtitles() {
 
   const config = await loadConfig();
   const targetLang = config.targetLanguage || 'zh';
+
+  const engine = translator.getEngine?.() || '?';
+  const engineLabel = engine === 'gemini-nano' ? 'Gemini Nano' : 'M2M100';
+  setExtractProgress(0, `[${engineLabel}] Translating 0/${segments.length}`);
+  console.log(`[Step3] Engine: ${engine}, translating ${segments.length} segments to ${targetLang}`);
+
+  const translated = await translator.batchTranslate(
+    segments,
+    segments[0].detectedLanguage || 'en',
+    targetLang,
+    (pct) => {
+      setExtractProgress(pct, `Translating... ${pct}%`);
+    }
+  );
+
   let translatedCount = 0;
-
-  for (let i = 0; i < segments.length && isExtracting; i++) {
-    const seg = segments[i];
-
-    // Skip if already in target language
-    if (seg.detectedLanguage === targetLang) {
-      seg.translation = ''; // No translation needed
-      translatedCount++;
-      continue;
-    }
-
-    const pct = Math.min(100, Math.round(i / segments.length * 100));
-    setExtractProgress(pct, `Translating ${i + 1}/${segments.length}`);
-    await nextPaint();
-
-    try {
-      const translation = await translator.translate(
-        seg.original,
-        seg.detectedLanguage || 'en',
-        targetLang,
-        []
-      );
-      seg.translation = translation || '';
-      if (translation) translatedCount++;
-    } catch (e) {
-      console.warn('[Step3] Segment', i + 1, 'translation failed:', e.message);
-    }
+  for (const seg of translated) {
+    if (seg.translation) translatedCount++;
   }
 
   // Refresh UI cards to show translations
   const list = $('subtitleList');
   list.innerHTML = '';
-  for (const seg of segments) {
+  for (const seg of translated) {
     const rtl = isRtl(seg.detectedLanguage) || isRtl(targetLang);
     addSubtitleCard(seg.start, seg.original, seg.translation, rtl);
   }

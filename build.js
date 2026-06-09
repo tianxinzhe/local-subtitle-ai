@@ -121,6 +121,8 @@ await bundle('player/script.js', 'player/script.js')
 
 await bundle('modules/whisper-worker.js', 'modules/whisper-worker.js')
 
+await bundle('modules/translate-worker.js', 'modules/translate-worker.js')
+
 const localeDir = join(DIST, '_locales', 'en', 'messages.json')
 
 const msgContent = readFileSync(localeDir, 'utf-8')
