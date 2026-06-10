@@ -114,5 +114,6 @@
   "model_small_desc": { "message": "更好精度，速度适中" },
   "model_medium_desc": { "message": "高质量，较慢" },
   "model_turbo_desc": { "message": "快速+高质量（推荐）" },
-  "model_large_desc": { "message": "最佳精度，最慢" }
+  "model_large_desc": { "message": "最佳精度，最慢" },
+  "label_engine_info": { "message": "翻译引擎" }
 }

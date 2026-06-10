@@ -1,7 +1,7 @@
 import { loadConfig, saveConfig, get } from '../modules/config.js';
 import { i18n } from '../modules/i18n.js';
 import { whisper } from '../modules/whisper.js';
-import { translator } from '../modules/translator.js';
+import { translator, Translator } from '../modules/translator.js';
 import { audioProcessor } from '../modules/audio-processor.js';
 import { sentenceMerger } from '../modules/sentence-merger.js';
 import { slidingWindow } from '../modules/sliding-window.js';
@@ -67,6 +67,39 @@ async function init() {
   await loadSettings();
   setupEventListeners();
   setModeCardsEnabled(false);
+  populateEngineInfo();
+}
+
+async function populateEngineInfo() {
+  const listEl = $('engineInfoList');
+  if (!listEl) return;
+  const engines = await Translator.getEnginesStatus();
+
+  // After activation, update M2M100 detail with actual result
+  const activeDetail = translator.getEngineDetail ? translator.getEngineDetail() : null;
+  if (activeDetail) {
+    for (const e of engines) {
+      if (e.engine.includes('M2M100') && activeDetail.engine.includes('M2M100')) {
+        e.available = activeDetail.available;
+        e.detail = activeDetail.detail;
+      }
+    }
+  }
+
+  // Sort: available first
+  engines.sort((a, b) => (a.available === b.available ? 0 : a.available ? -1 : 1));
+
+  listEl.innerHTML = engines.map(e => {
+    const ok = e.available;
+    return `<div class="engine-info-item">
+      <span class="engine-info-check ${ok ? 'ok' : 'fail'}">${ok ? '✓' : '✗'}</span>
+      <div>
+        <div class="engine-info-name">${e.engine}</div>
+        <div class="engine-info-detail">${e.detail}</div>
+      </div>
+    </div>`;
+  }).join('');
+  $('engineInfo').classList.remove('hidden');
 }
 
 async function connectBackground() {
@@ -284,6 +317,14 @@ function setupEventListeners() {
       doActivate(model);
     }
   });
+
+  // Engine info toggle
+  $('engineInfoToggle').addEventListener('click', () => {
+    const body = $('engineInfoBody');
+    const arrow = $('engineInfoToggle').querySelector('.engine-info-arrow');
+    body.classList.toggle('hidden');
+    arrow.classList.toggle('open');
+  });
 }
 
 function showModelPicker(show) {
@@ -351,24 +392,32 @@ async function doActivate(model) {
     await translator.init({
       onProgress: (pct, stage) => {
         progressFill.style.width = pct + '%';
-        progressLabel.textContent = `Translator: ${pct}%`;
-        translatorStatusEl.textContent = `${pct}%`;
+        // Show clean stage text without percentage (progress bar shows it visually)
+        const displayStage = stage || `Translator: ${pct}%`;
+        progressLabel.textContent = displayStage;
+        if (pct < 100) {
+          translatorStatusEl.textContent = displayStage;
+        }
         if (pct >= 100) finalStage = stage;
       },
     });
     translatorOk = true;
-    const engineLabels = {
-      'gemini_ready': '✓ Gemini Nano',
-      'nllb_1workers': '✓ M2M100 (1 worker)',
-      'nllb_2workers': '✓ M2M100 (2 workers)',
-      'nllb_3workers': '✓ M2M100 (3 workers)',
-    };
-    translatorStatusEl.textContent = engineLabels[finalStage] || '✓ OK';
+    const badge = translator.getEngineDetail();
+    if (badge && badge.engine.includes('M2M100')) {
+      const dts = badge.detail.includes('q8') ? 'q8' : badge.detail.includes('fp16') ? 'fp16' : 'fp32';
+      translatorStatusEl.textContent = `✓ M2M100-418M ${dts} (${badge.engine.match(/\d+ workers/)?.[0] || '?'})`;
+    } else if (badge && badge.engine.includes('Gemini')) {
+      translatorStatusEl.textContent = '✓ Gemini Nano ready';
+    } else {
+      translatorStatusEl.textContent = '✓ OK';
+    }
     translatorStatusEl.className = 'model-status model-ready';
+    populateEngineInfo();
   } catch (err) {
     translatorStatusEl.textContent = '✗ Failed';
     translatorStatusEl.className = 'model-status model-error';
     console.error('[SidePanel] Translator load failed:', err);
+    populateEngineInfo();
   }
 
   // Done
@@ -665,15 +714,19 @@ async function translateSubtitles() {
 
   const config = await loadConfig();
   const targetLang = config.targetLanguage || 'zh';
+  const sourceLang = config.sourceLanguage || 'auto';
+  const effectiveSource = sourceLang !== 'auto'
+    ? sourceLang
+    : (segments[0].detectedLanguage || targetLang === 'zh' ? 'en' : 'zh');
 
   const engine = translator.getEngine?.() || '?';
-  const engineLabel = engine === 'gemini-nano' ? 'Gemini Nano' : 'M2M100';
+  const engineLabel = engine === 'gemini-nano' ? 'Gemini Nano' : 'M2M100-418M';
   setExtractProgress(0, `[${engineLabel}] Translating 0/${segments.length}`);
-  console.log(`[Step3] Engine: ${engine}, translating ${segments.length} segments to ${targetLang}`);
+  console.log(`[Step3] Engine: ${engine}, source=${effectiveSource}, target=${targetLang}, translating ${segments.length} segments`);
 
   const translated = await translator.batchTranslate(
     segments,
-    segments[0].detectedLanguage || 'en',
+    effectiveSource,
     targetLang,
     (pct) => {
       setExtractProgress(pct, `Translating... ${pct}%`);
@@ -692,6 +745,16 @@ async function translateSubtitles() {
     const rtl = isRtl(seg.detectedLanguage) || isRtl(targetLang);
     addSubtitleCard(seg.start, seg.original, seg.translation, rtl);
   }
+
+  // Write translated segments back to srtExporter
+  srtExporter.clear();
+  srtExporter.addSegments(translated);
+
+  // Verify writeback
+  const writtenSegs = srtExporter.getSegments();
+  const withTr = writtenSegs.filter(s => s.translation).length;
+  console.log(`[Step3] Writeback verified: ${writtenSegs.length} segs, ${withTr} with translation`);
+  console.log('[Step3] First 3 after writeback:', writtenSegs.slice(0, 3).map(s => ({ idx: s.index, tr: (s.translation || '').substring(0, 40) })));
 
   console.log('[Step3] Done, translated:', translatedCount);
   setExtractProgress(100, `Translated ${translatedCount} segments`);
@@ -1021,6 +1084,8 @@ function downloadTranslatedSrt() {
     return;
   }
   const content = srtExporter.exportBilingual();
+  console.log('[Download] exportBilingual first 500 chars:', content.substring(0, 500));
+  console.log('[Download] segments:', srtExporter.getSegments().slice(0, 5).map(s => ({ i: s.index, orig: s.original.substring(0, 30), tr: (s.translation || '').substring(0, 30) })));
   const bom = '\uFEFF';
   const blob = new Blob([bom + content], { type: 'text/srt;charset=utf-8;' });
   const url = URL.createObjectURL(blob);

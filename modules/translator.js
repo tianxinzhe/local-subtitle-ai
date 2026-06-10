@@ -13,35 +13,51 @@ class TranslationWorkerPool {
   }
 
   async init(onProgress) {
-    const numWorkers = this._workerCount();
-    console.log(`[Translator] Starting translation worker pool: ${numWorkers} workers`);
+    this._onProgress = onProgress;
+    this._numWorkers = this._workerCount();
+    console.log(`[Translator] Starting translation worker pool: ${this._numWorkers} workers`);
+    this._engineInfo = null;
+    this._errorDetail = '';
+    this._lastProgressTime = 0;
     const workerUrl = chrome.runtime.getURL('modules/translate-worker.js');
     const wasmPaths = chrome.runtime.getURL('libs/');
 
-    onProgress(5, `Starting ${numWorkers} worker(s)`);
-
     this._workers = [];
-    for (let i = 0; i < numWorkers; i++) {
+    for (let i = 0; i < this._numWorkers; i++) {
       const worker = new Worker(workerUrl, { type: 'module' });
       this._setupWorker(worker, i);
       this._workers.push(worker);
     }
 
-    // Set mirror for main-thread transformers.js (for any fallback imports)
     env.remoteHost = HF_MIRROR;
 
     // Load model on first worker (downloads + loads)
-    onProgress(10, 'Loading model (worker 1)');
-    await this._sendTo(0, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 300000);
+    onProgress(10, 'Downloading M2M100-418M...');
+    const result = await this._sendTo(0, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 300000);
+    if (!result || !result.success) {
+      const errMsg = result?.error || 'Unknown error';
+      this._errorDetail = `Graph optimization: ${errMsg}`;
+      this._ready = false;
+      throw new Error(`M2M100-418M failed to load: ${errMsg}`);
+    }
+
+    this._engineInfo = { dtype: result.dtype, optLevel: result.optLevel };
 
     // Remaining workers load from cache
     for (let i = 1; i < this._workers.length; i++) {
-      onProgress(10 + Math.round(i / numWorkers * 80), `Loading model (worker ${i + 1})`);
+      const pct = this._workerLoadPct(i);
+      onProgress(pct, `Loading cache (worker ${i + 1})...`);
       await this._sendTo(i, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 300000);
     }
 
     this._ready = true;
-    onProgress(100, 'ready');
+    const workerCount = this._workers.length;
+    onProgress(100, `M2M100-418M ready (${workerCount} workers)`);
+  }
+
+  _workerLoadPct(workerIdx) {
+    if (this._numWorkers <= 1) return 95;
+    return 10 + Math.round(workerIdx / (this._numWorkers - 1) * 85);
   }
 
   _workerCount() {
@@ -56,13 +72,31 @@ class TranslationWorkerPool {
       if (!pending) return;
 
       if (type === 'loadProgress') {
-        // Forward progress from first worker
+        if (this._onProgress && payload && typeof payload.progress === 'number') {
+          const pct = payload.progress <= 1 ? payload.progress * 100 : payload.progress;
+          const wi = pending.workerIdx;
+          let overall;
+          if (this._numWorkers <= 1) {
+            overall = 10 + Math.round(pct / 100 * 85);
+          } else {
+            const start = this._workerLoadPct(wi);
+            const end = wi + 1 < this._numWorkers ? this._workerLoadPct(wi + 1) : 95;
+            overall = start + Math.round(pct / 100 * (end - start));
+          }
+          // Throttle UI updates to every 300ms to avoid flickering
+          const now = Date.now();
+          if (!this._lastProgressTime || now - this._lastProgressTime > 300) {
+            this._lastProgressTime = now;
+            const stage = wi === 0 ? 'Downloading model' : `Loading cache (worker ${wi + 1})`;
+            this._onProgress(overall, stage);
+          }
+        }
         return;
       }
 
       this._pending.delete(msgId);
       if (type === 'loaded') {
-        pending.resolve();
+        pending.resolve(payload);
       } else if (type === 'translateResult') {
         pending.resolve(payload);
       } else if (type === 'error') {
@@ -105,13 +139,15 @@ class TranslationWorkerPool {
   }
 
   async translate(text, srcLang, tgtLang) {
-    return this._sendTo(0, 'translate', { text, srcLang, tgtLang }, 120000);
+    const res = await this._sendTo(0, 'translate', { texts: [text], srcLang, tgtLang }, 180000);
+    return res.translations?.[0] || text;
   }
 
   async batchTranslate(segments, srcLang, tgtLang, onProgress) {
-    const SEP = '\n【=SEP=】\n';
-    const MAX_BATCH_CHARS = 5000;
-    const MAX_BATCH_SEGMENTS = 100;
+    // Batch size: each segment takes ~6s on q8+disabled. 10 segments = ~60s + overhead
+    // Worker recreation adds ~15s per batch, so keep batches small
+    const MAX_BATCH_CHARS = 500;
+    const MAX_BATCH_SEGMENTS = 10;
     const total = segments.length;
     const numWorkers = this._workers.length;
     const allBatches = [];
@@ -129,31 +165,47 @@ class TranslationWorkerPool {
       }
       allBatches.push(batch);
     }
-
-    // Assign batches to workers round-robin
+    console.log(`[batchTranslate] ${total} segs → ${allBatches.length} batches, ${numWorkers} workers`);
     const workerChains = Array.from({ length: numWorkers }, () => ({ batches: [], results: [] }));
     allBatches.forEach((batch, idx) => {
       workerChains[idx % numWorkers].batches.push(batch);
     });
 
+    const workerUrl = chrome.runtime.getURL('modules/translate-worker.js');
+    const wasmPaths = chrome.runtime.getURL('libs/');
+
     const workerPromises = workerChains.map((chain, workerIdx) => {
       let chainPromise = Promise.resolve();
       for (const batch of chain.batches) {
         chainPromise = chainPromise.then(async () => {
+          // Recreate worker if previous batch corrupted the WASM state
+          // (skip first batch per worker - worker is fresh from init)
+          if (chain.results.length > 0 && this._workers[workerIdx]) {
+            this._workers[workerIdx].terminate();
+            const freshWorker = new Worker(workerUrl, { type: 'module' });
+            this._setupWorker(freshWorker, workerIdx);
+            this._workers[workerIdx] = freshWorker;
+            await this._sendTo(workerIdx, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 120000);
+          }
+
           const texts = batch.map(s => s.original);
-          const combined = texts.join(SEP);
           try {
             const res = await this._sendTo(workerIdx, 'translate', {
-              text: combined, srcLang, tgtLang,
-            }, 120000);
-            const parts = res.text.split(SEP);
+              texts, srcLang, tgtLang,
+            }, 180000);
+            if (!res.translations || res.translations.length !== batch.length) {
+              console.error(`[batchTranslate] w${workerIdx} expected ${batch.length} translations, got ${res.translations?.length}`);
+              throw new Error('Translation count mismatch');
+            }
+            console.log(`[batchTranslate] w${workerIdx} batch=${batch.length} ok, non-empty=${res.translations.filter(t => t.length > 0).length}`);
             for (let j = 0; j < batch.length; j++) {
               chain.results.push({
                 ...batch[j],
-                translation: parts[j] ? parts[j].trim() : '',
+                translation: res.translations[j] || '',
               });
             }
-          } catch {
+          } catch (err) {
+            console.error(`[batchTranslate] w${workerIdx} batch failed:`, err?.message || err);
             for (const seg of batch) {
               chain.results.push({ ...seg, translation: '' });
             }
@@ -246,24 +298,25 @@ class Translator {
     this._workerPool = null;
     this._engine = null;
     this._ready = false;
+    this._lastError = '';
   }
 
   async init(options = {}) {
     const onProgress = options.onProgress || (() => {});
     this._ready = false;
 
-    onProgress(0, 'checking');
+    onProgress(0, 'Checking translation engine...');
     const geminiOk = await this._gemini._checkAvailable();
 
     if (geminiOk) {
       this._engine = 'gemini-nano';
       this._ready = true;
       console.log('[Translator] Using engine: Gemini Nano');
-      onProgress(100, 'gemini_ready');
+      onProgress(100, 'Gemini Nano ready');
       return;
     }
 
-    onProgress(5, 'setting_up_workers');
+    onProgress(5, 'Setting up workers...');
     env.remoteHost = HF_MIRROR;
 
     this._workerPool = new TranslationWorkerPool();
@@ -273,11 +326,12 @@ class Translator {
       this._ready = true;
       const workerCount = this._workerPool._workers.length;
       console.log(`[Translator] Using engine: M2M100-418M (${workerCount} workers)`);
-      onProgress(100, `nllb_${workerCount}workers`);
+      onProgress(100, `M2M100-418M ready (${workerCount} workers)`);
       await set('nllbModelDownloaded', true);
     } catch (err) {
       console.error('[Translator] Worker pool init failed:', err);
       this._ready = false;
+      this._lastError = err.message;
       throw new Error(`Translation engine unavailable: ${err.message}`);
     }
   }
@@ -334,6 +388,58 @@ class Translator {
 
   getEngine() { return this._engine; }
   isReady() { return this._ready; }
+
+  getEngineDetail() {
+    if (this._engine === 'gemini-nano') {
+      return { engine: 'Chrome Translator (Gemini Nano)', available: true, detail: '' };
+    }
+    if (this._engine === 'nllb' && this._workerPool && this._workerPool._engineInfo) {
+      const info = this._workerPool._engineInfo;
+      const dt = info?.dtype || '?';
+      const opt = info?.optLevel || '?';
+      return { engine: `M2M100-418M (${this._workerPool._workers.length} workers)`, available: true, detail: `${dt}, graph opt: ${opt}` };
+    }
+    if (this._lastError) {
+      return { engine: 'M2M100-418M (on-device)', available: false, detail: this._lastError };
+    }
+    return null;
+  }
+
+  static async getEnginesStatus() {
+    const results = [];
+    // Chrome Translator API
+    try {
+      let available = false;
+      let detail = '';
+      if (typeof Translator !== 'undefined' && Translator.canTranslate) {
+        const r = await Translator.canTranslate({ sourceLanguage: 'en', targetLanguage: 'zh' });
+        if (r === 'readily') { available = true; detail = 'Ready'; }
+        else if (r === 'after-download') { available = true; detail = 'Model needs download (enable chrome://flags/#translation-api)'; }
+        else { detail = 'Not available for this language pair'; }
+      } else if (typeof ai !== 'undefined' && ai?.translator) {
+        const caps = await ai.translator.capabilities();
+        if (caps.available !== 'no') { available = true; detail = 'Ready'; }
+        else { detail = 'Gemini Nano not downloaded. Enable chrome://flags/#optimization-guide-on-device-model'; }
+      } else {
+        detail = 'Not supported in this Chrome version (need 131+)';
+      }
+      results.push({ engine: 'Chrome Translator (Gemini Nano)', available, detail });
+    } catch (e) {
+      results.push({ engine: 'Chrome Translator (Gemini Nano)', available: false, detail: `Error: ${e.message}` });
+    }
+    // M2M100-418M
+    try {
+      if (typeof Worker === 'undefined') {
+        results.push({ engine: 'M2M100-418M (on-device)', available: false, detail: 'Web Workers not supported' });
+      } else {
+        results.push({ engine: 'M2M100-418M (on-device)', available: true, detail: 'Will download ~800MB on first use' });
+      }
+    } catch (e) {
+      results.push({ engine: 'M2M100-418M (on-device)', available: false, detail: `Error: ${e.message}` });
+    }
+    return results;
+  }
 }
 
 export const translator = new Translator();
+export { Translator };

@@ -114,5 +114,6 @@
   "model_small_desc": { "message": "Better accuracy, moderate speed" },
   "model_medium_desc": { "message": "High quality, slower" },
   "model_turbo_desc": { "message": "Fast + high quality (recommended)" },
-  "model_large_desc": { "message": "Best accuracy, slowest" }
+  "model_large_desc": { "message": "Best accuracy, slowest" },
+  "label_engine_info": { "message": "Translation Engines" }
 }

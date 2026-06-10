@@ -58,32 +58,45 @@ NLLB-600M ONNX 模型文件不存在，翻译直接返回原文。后续即使�
 | 单个 NLLB/M2M100 逐条翻译 | ❌ 太慢 | 1312 条字幕逐条推理，CPU 利用率仅 13% |
 | **并行 Worker 翻译** | ✅ 显著提升 | 2-3 个 Worker 并行处理批次，CPU 利用率提升到 70-90% |
 
-### 核心瓶颈：MATMulNBits + 图优化
+### ORT 1.26.0 WASM 已知 Bug
 
-ORT 1.26.0 WASM 后端的 `TransposeDQWeightsForMatMulNBits` bug：
+| Bug | 触发条件 | 影响 |
+|-----|----------|------|
+| `TransposeDQWeightsForMatMulNBits` | `dtype: 'q8'` + `graphOpt ≥ 'extended'` | q8 不能开图优化 |
+| `SimplifiedLayerNormFusion` | `dtype: 'fp16'` 模型中已有 Fusion 节点 | fp16 M2M100-418M 无法加载（HF 转换 bug） |
 
-- `dtype: 'q8'` 使用 `MatMulNBits` 量化算子
-- `graphOptimizationLevel: 'extended'` 或 `'all'` 尝试融合/优化这些算子时崩溃
-- 必须设 `graphOptimizationLevel: 'disabled'` → 所有计算串行执行 → CPU 利用率低
+### 模型加载策略（自动降级）
 
-### 当前最终方案
+`translate-worker.js` 中按优先级尝试：
 
 ```
-dtype: 'fp16'                    # 不用 q8（避免 MatMulNBits）
-graphOptimizationLevel: 'all'    # 开满图优化
+1. q8 + graphOpt=disabled      (~200MB)  ← 首选：小、快
+2. fp16 + graphOpt=all         (~800MB)  ← 如果 q8 不可用
+3. fp16 + graphOpt=disabled    (~800MB)  ← 如果 all 崩溃
+4. default(fp32) + graphOpt=all (~1.6GB) ← 最后手段
 ```
 
-- fp16 模型使用标准 float 算子（`MatMul`、`Gemm`），不触发 bug
-- 图优化合并计算步骤，让 WASM 跑满多核
-- 模型大小 ~800MB（M2M100-418M fp16），代价是一次性下载
+每种 dtype 对应不同的 ONNX 模型文件（`model_quantized.onnx` / `model_fp16.onnx` / `model.onnx`），自动尝试直到成功。
 
-### 翻译引擎优先级
+### 多 Worker + 逐块串行翻译
+
+- 2-3 个 Worker 运行 M2M100-418M
+- 批次大小：5000 chars / 100 segs
+- Round-robin 分发，每个 Worker 内部 taskQueue 串行化
+- CPU 利用率从 13% 提升到 70-90%
+
+### 翻译引擎优先级 + 可视状态面板
 
 ```
 Chrome 138+ window.Translator → Chrome 131-137 window.ai.translator → M2M100-418M 多 Worker 池
 ```
 
-UI 会显示当前使用的引擎（"✓ Gemini Nano" / "✓ M2M100 (3 workers)"）。
+侧边栏新增折叠面板，显示各引擎可用性：
+
+| 引擎 | 状态 | 详情 |
+|------|------|------|
+| Chrome Translator | ✓ / ✗ | Ready / 需要开 flag / 不支持 |
+| M2M100-418M | ✓ / ✗ | q8/disabled / fp16/all / fp32/all + 错误原因 |
 
 ---
 
@@ -109,8 +122,8 @@ script-src: 'self' + 'wasm-unsafe-eval'
 
 ## 仍需解决的问题
 
-1. **fp16 M2M100 首次下载** — ~800MB，在慢网络下体验差
-2. **Whisper q8 仍有图优化限制** — 转录部分仍用 `dtype: 'q8'` + `graphOptimizationLevel: 'disabled'`，如果 Whisper 也有 fp16 版本，可以尝试同样的优化
-3. **翻译 Worker 内存** — 每 Worker ~800MB（模型加载后），3 个 Worker ~2.4GB
-4. **翻译质量评估** — 未系统对比 Gemini Nano vs M2M100 的质量
-5. **多个翻译 Worker 间切片合并顺序** — 当前按 `index` 排序，但网络波动可能导致批次完成顺序不一致
+1. **q8 M2M100 推理速度** — `graphOpt: disabled` 时串行化计算，依赖多 Worker 并行补偿。需要实测 3 Worker 下 47 分钟视频的翻译耗时。
+2. **Whisper q8 仍有图优化限制** — 转录部分同用 `q8` + `graphOpt: disabled`，可考虑 Whisper fp16 版本做同样优化。
+3. **翻译 Worker 内存** — q8 ~200MB/worker，3 Worker ~600MB；fp32 ~1.6GB/worker，可能 OOM。
+4. **翻译质量评估** — 未系统对比 Gemini Nano vs M2M100 的质量。
+5. **多个翻译 Worker 间切片合并顺序** — 当前按 `index` 排序，但网络波动可能导致批次完成顺序不一致。
