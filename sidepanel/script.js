@@ -37,10 +37,14 @@ function nextPaint() {
 }
 
 // Update the extraction progress bar + status label in one place.
-function setExtractProgress(pct, statusText) {
+function setExtractProgress(pct, statusText, opts) {
+  // Map per-step progress to overall 3-step range
+  const base = opts?.base ?? 0;
+  const range = opts?.range ?? 100;
+  const overall = Math.round(base + pct * range / 100);
   const fillEl = $('extractFill');
   if (fillEl) {
-    fillEl.style.setProperty('width', pct + '%', 'important');
+    fillEl.style.setProperty('width', overall + '%', 'important');
     fillEl.style.setProperty('display', 'block', 'important');
   }
   if (statusText !== undefined) {
@@ -609,7 +613,7 @@ async function extractAudio(file) {
   $('extractProgress').classList.remove('hidden');
   $('stepAudioBtn').className = 'step-btn step-active';
   $('stepAudioStatus').textContent = '...';
-  setExtractProgress(0, 'Decoding audio...');
+  setExtractProgress(0, 'Decoding audio...', { base: 0, range: 33 });
 
   try {
     const raw = await audioProcessor.decodeAudioFile(file);
@@ -619,7 +623,7 @@ async function extractAudio(file) {
     // Store clean audio for WAV export
     audioData = raw;
 
-    setExtractProgress(100, 'Audio ready');
+    setExtractProgress(100, 'Audio ready', { base: 0, range: 33 });
     $('stepAudioBtn').className = 'step-btn step-done';
     $('stepAudioStatus').textContent = '✓';
     $('extractDownloads').classList.remove('hidden');
@@ -663,7 +667,7 @@ async function transcribeAudio() {
     const segments = await whisper.transcribeAll(audioData, {
       forceLanguage: sourceLang !== 'auto' ? sourceLang : null,
     }, (pct, msg) => {
-      setExtractProgress(pct, msg);
+      setExtractProgress(pct, msg, { base: 33, range: 33 });
       if (isExtracting === false) throw new Error('Cancelled');
     });
 
@@ -687,13 +691,13 @@ async function transcribeAudio() {
     }
 
     console.log('[Step2] Done, segments:', added);
-    setExtractProgress(100, `Transcribed ${added} segments`);
+    setExtractProgress(100, `Transcribed ${added} segments`, { base: 33, range: 33 });
   } catch (e) {
     if (e.message === 'Cancelled') {
       console.log('[Step2] Cancelled');
     } else {
       console.error('[Step2] Failed:', e);
-      setExtractProgress(0, 'Error');
+      setExtractProgress(0, 'Error', { base: 33, range: 33 });
     }
   }
   $('stepTranscribeBtn').className = 'step-btn step-done';
@@ -721,7 +725,7 @@ async function translateSubtitles() {
 
   const engine = translator.getEngine?.() || '?';
   const engineLabel = engine === 'gemini-nano' ? 'Gemini Nano' : 'M2M100-418M';
-  setExtractProgress(0, `[${engineLabel}] Translating 0/${segments.length}`);
+  setExtractProgress(0, `[${engineLabel}] Translating 0/${segments.length}`, { base: 66, range: 34 });
   console.log(`[Step3] Engine: ${engine}, source=${effectiveSource}, target=${targetLang}, translating ${segments.length} segments`);
 
   const translated = await translator.batchTranslate(
@@ -729,7 +733,7 @@ async function translateSubtitles() {
     effectiveSource,
     targetLang,
     (pct) => {
-      setExtractProgress(pct, `Translating... ${pct}%`);
+      setExtractProgress(pct, `Translating... ${pct}%`, { base: 66, range: 34 });
     }
   );
 
@@ -757,7 +761,7 @@ async function translateSubtitles() {
   console.log('[Step3] First 3 after writeback:', writtenSegs.slice(0, 3).map(s => ({ idx: s.index, tr: (s.translation || '').substring(0, 40) })));
 
   console.log('[Step3] Done, translated:', translatedCount);
-  setExtractProgress(100, `Translated ${translatedCount} segments`);
+  setExtractProgress(100, `Translated ${translatedCount} segments`, { base: 66, range: 34 });
   $('stepTranslateBtn').className = 'step-btn step-done';
   $('stepTranslateStatus').textContent = '✓';
   $('downloadTranslatedBtn').disabled = false;
