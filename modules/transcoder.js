@@ -63,11 +63,11 @@ async function getFFmpeg(onProgress) {
   }
 }
 
-async function transcodeToWav(inputFile, onProgress) {
+async function transcodeToPcm(inputFile, onProgress) {
   const ff = await getFFmpeg(onProgress);
 
   const inputName = 'in_' + Date.now() + '_' + inputFile.name.replace(/[^\w.-]/g, '_');
-  const outputName = 'out.wav';
+  const outputName = 'out.pcm';
 
   const buf = await inputFile.arrayBuffer();
   await ff.writeFile(inputName, new Uint8Array(buf));
@@ -80,7 +80,8 @@ async function transcodeToWav(inputFile, onProgress) {
       '-vn',
       '-ac', '1',
       '-ar', '16000',
-      '-f', 'wav',
+      '-f', 's16le',
+      '-acodec', 'pcm_s16le',
       outputName,
     ]);
   } catch (e) {
@@ -94,18 +95,17 @@ async function transcodeToWav(inputFile, onProgress) {
   await ff.deleteFile(inputName);
   await ff.deleteFile(outputName);
 
-  return new Blob([data], { type: 'audio/wav' });
+  return data; // Uint8Array of raw 16-bit signed little-endian PCM @ 16kHz mono
 }
 
-async function wavBlobToFloat32(wavBlob) {
-  const buf = await wavBlob.arrayBuffer();
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  try {
-    const audioBuf = await ctx.decodeAudioData(buf);
-    return audioBuf.getChannelData(0).slice();
-  } finally {
-    ctx.close();
+function pcmInt16ToFloat32(uint8) {
+  const count = (uint8.byteLength / 2) | 0;
+  const out = new Float32Array(count);
+  const view = new DataView(uint8.buffer, uint8.byteOffset, uint8.byteLength);
+  for (let i = 0; i < count; i++) {
+    out[i] = view.getInt16(i * 2, true) / 32768;
   }
+  return out;
 }
 
 export async function extractAudioViaFfmpeg(file, options = {}) {
@@ -113,13 +113,13 @@ export async function extractAudioViaFfmpeg(file, options = {}) {
   const onLog = options.onLog || (() => {});
 
   onLog('Loading ffmpeg-core...');
-  const wavBlob = await transcodeToWav(file, onProgress);
-  onLog('ffmpeg transcode done, decoding WAV to Float32...');
-  onProgress(95, 'Decoding WAV...');
+  const pcmData = await transcodeToPcm(file, onProgress);
+  onLog('ffmpeg transcode done, converting PCM to Float32...');
+  onProgress(95, 'Converting...');
 
-  const audio = await wavBlobToFloat32(wavBlob);
+  const audio = pcmInt16ToFloat32(pcmData);
   onProgress(100, 'Audio ready');
-  onLog('Audio extracted: ' + (audio.length / 16000).toFixed(2) + 's');
+  onLog('Audio extracted: ' + (audio.length / 16000).toFixed(2) + 's, ' + (audio.byteLength / 1024 / 1024).toFixed(1) + 'MB');
   return audio;
 }
 

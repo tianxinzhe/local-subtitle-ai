@@ -62,7 +62,7 @@ class TranslationWorkerPool {
 
   _workerCount() {
     const cpuCores = navigator.hardwareConcurrency || 4;
-    return Math.min(Math.max(cpuCores - 1, 1), 3);
+    return Math.min(Math.max(cpuCores - 1, 1), 4);
   }
 
   _setupWorker(worker, idx) {

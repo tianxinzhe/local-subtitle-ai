@@ -231,8 +231,8 @@ class WhisperWorkerEngine {
     const perWorkerMB = { tiny: 150, base: 250, small: 500, medium: 900, 'large-v3-turbo': 1200, 'large-v3': 1800 };
     const perWorker = perWorkerMB[model] || 300;
     const maxByMem = Math.max(1, Math.floor((memGB * 1024 * 0.6) / perWorker));
-    const maxByCpu = Math.max(1, Math.floor(cpuCores * 0.75));
-    return Math.min(maxByMem, maxByCpu, 4);
+    const maxByCpu = Math.max(1, Math.floor(cpuCores * 0.9));
+    return Math.min(maxByMem, maxByCpu, 6);
   }
 
   async load(options = {}) {
@@ -424,7 +424,7 @@ class WhisperWorkerEngine {
     }
 
     const SAMPLE_RATE = 16000;
-    const CHUNK_SEC = 60;
+    const CHUNK_SEC = 120;
     const chunkSize = CHUNK_SEC * SAMPLE_RATE;
     const totalChunks = Math.ceil(input.length / chunkSize);
     const numWorkers = this._workers.length;
@@ -461,7 +461,7 @@ class WhisperWorkerEngine {
                 return_timestamps: true,
                 forceLanguage: options.forceLanguage || null,
               },
-            }, [chunk.data.buffer], 240000);
+            }, [chunk.data.buffer], 480000);
             completedChunks++;
             if (onProgress) {
               const pct = Math.round((completedChunks / totalChunks) * 100);
