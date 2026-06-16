@@ -14,51 +14,140 @@ class AudioProcessor {
     return this._audioContext;
   }
 
-  async decodeAudioFile(file) {
-    console.log('[AudioProcessor] decodeAudioFile start:', file.name, file.size, 'bytes');
+  async decodeAudioFile(file, options = {}) {
+    const onProgress = options.onProgress || (() => {});
+    const onLog = options.onLog || (() => {});
+
     const arrayBuffer = await file.arrayBuffer();
-    console.log('[AudioProcessor] arrayBuffer loaded:', arrayBuffer.byteLength, 'bytes');
+    onLog('decodeAudioData attempt: ' + arrayBuffer.byteLength + ' bytes');
     const audioContext = this._getAudioContext();
-    console.log('[AudioProcessor] AudioContext state:', audioContext.state, 'sampleRate:', audioContext.sampleRate);
     if (audioContext.state === 'suspended') {
-      await audioContext.resume();
-      console.log('[AudioProcessor] AudioContext resumed, state:', audioContext.state);
+      try { await audioContext.resume(); } catch {}
     }
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    console.log('[AudioProcessor] decodeAudioData done: duration=' + audioBuffer.duration.toFixed(2) + 's, sampleRate=' + audioBuffer.sampleRate + ', channels=' + audioBuffer.numberOfChannels + ', length=' + audioBuffer.length);
-    const channelData = audioBuffer.getChannelData(0);
-    let maxAbs = 0;
-    for (let i = 0; i < channelData.length; i++) {
-      const abs = Math.abs(channelData[i]);
-      if (abs > maxAbs) maxAbs = abs;
-    }
-    console.log('[AudioProcessor] source audio max amplitude:', maxAbs.toFixed(6), 'at', audioBuffer.sampleRate + 'Hz');
-    
-    // If audio is very quiet (amplitude < 0.001), use all channels and sum them
-    if (maxAbs < 0.001 && audioBuffer.numberOfChannels > 1) {
-      console.log('[AudioProcessor] Audio very quiet, summing all', audioBuffer.numberOfChannels, 'channels');
-      let combined = new Float32Array(audioBuffer.length);
-      for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
-        const ch = audioBuffer.getChannelData(c);
-        for (let i = 0; i < ch.length; i++) combined[i] += ch[i];
-      }
-      // Normalize by channel count
-      for (let i = 0; i < combined.length; i++) combined[i] /= audioBuffer.numberOfChannels;
-      
-      maxAbs = 0;
-      for (let i = 0; i < combined.length; i++) {
-        const abs = Math.abs(combined[i]);
+    try {
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+      onLog('decodeAudioData OK: ' + audioBuffer.duration.toFixed(2) + 's @ ' + audioBuffer.sampleRate + 'Hz');
+
+      const channelData = audioBuffer.getChannelData(0);
+      let maxAbs = 0;
+      for (let i = 0; i < channelData.length; i++) {
+        const abs = Math.abs(channelData[i]);
         if (abs > maxAbs) maxAbs = abs;
       }
-      console.log('[AudioProcessor] After channel sum, max amplitude:', maxAbs.toFixed(6));
-      
-      const resampled = await this._resample(combined, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
-      console.log('[AudioProcessor] resample done: length=' + resampled.length);
-      return resampled;
+
+      if (maxAbs < 0.001 && audioBuffer.numberOfChannels > 1) {
+        onLog('Audio quiet, summing ' + audioBuffer.numberOfChannels + ' channels');
+        const combined = new Float32Array(audioBuffer.length);
+        for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+          const ch = audioBuffer.getChannelData(c);
+          for (let i = 0; i < ch.length; i++) combined[i] += ch[i];
+        }
+        for (let i = 0; i < combined.length; i++) combined[i] /= audioBuffer.numberOfChannels;
+        onProgress(100, 'Decoded');
+        return this._resample(combined, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
+      }
+
+      onProgress(100, 'Decoded');
+      return this._resample(channelData, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
+    } catch (err) {
+      onLog('decodeAudioData failed (' + err.message + '), trying ffmpeg...');
+      try {
+        const { extractAudioViaFfmpeg } = await import('./transcoder.js');
+        const result = await extractAudioViaFfmpeg(file, { onProgress, onLog });
+        return result;
+      } catch (ffErr) {
+        onLog('ffmpeg transcode failed (' + ffErr.message + '), falling back to video element (real-time)...');
+        return this.decodeAudioViaVideo(file, { onProgress, onLog });
+      }
     }
-    
-    const resampled = await this._resample(channelData, audioBuffer.sampleRate, TARGET_SAMPLE_RATE);
-    console.log('[AudioProcessor] resample done: length=' + resampled.length + ', duration=' + (resampled.length / TARGET_SAMPLE_RATE).toFixed(2) + 's');
+  }
+
+  async decodeAudioViaVideo(file, options = {}) {
+    const onProgress = options.onProgress || (() => {});
+    const onLog = options.onLog || (() => {});
+
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.crossOrigin = 'anonymous';
+    video.preload = 'auto';
+    video.style.display = 'none';
+    document.body.appendChild(video);
+
+    const blobUrl = URL.createObjectURL(file);
+    video.src = blobUrl;
+
+    await new Promise((resolve, reject) => {
+      video.addEventListener('loadedmetadata', resolve, { once: true });
+      video.addEventListener('error', () => reject(new Error('Cannot load this file')), { once: true });
+    });
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') {
+      try { await audioCtx.resume(); } catch {}
+    }
+    const sourceNode = audioCtx.createMediaElementSource(video);
+    const destNode = audioCtx.createMediaStreamDestination();
+    sourceNode.connect(destNode);
+
+    const SEG = 60;
+    const chunks = [];
+    await video.play();
+    onLog('Video playback started, capturing in ' + SEG + 's segments');
+
+    for (let segIdx = 0; ; segIdx++) {
+      const segStart = video.currentTime;
+      const segBlob = await new Promise((resolve, reject) => {
+        const parts = [];
+        let rec;
+        try {
+          rec = new MediaRecorder(destNode.stream, { mimeType: 'audio/webm;codecs=opus' });
+        } catch {
+          rec = new MediaRecorder(destNode.stream);
+        }
+        rec.ondataavailable = (e) => { if (e.data.size > 0) parts.push(e.data); };
+        rec.onstop = () => resolve(new Blob(parts, { type: 'audio/webm' }));
+        rec.onerror = (e) => reject(e.error || new Error('Recording failed'));
+        rec.start();
+        setTimeout(() => { if (rec.state === 'recording') rec.stop(); }, SEG * 1000);
+      });
+
+      const buf = await segBlob.arrayBuffer();
+      let decoded;
+      try {
+        decoded = await audioCtx.decodeAudioData(buf);
+      } catch (err) {
+        onLog('Segment ' + segIdx + ' decode failed: ' + err.message);
+        continue;
+      }
+      const ch = decoded.getChannelData(0);
+      chunks.push(new Float32Array(ch));
+
+      const elapsed = video.currentTime - segStart;
+      if (elapsed < 2 && segIdx > 0) {
+        onLog('Video stalled at ' + video.currentTime.toFixed(2) + 's, ending capture');
+        break;
+      }
+      onProgress(0, 'Segment ' + (segIdx + 1) + ' captured');
+    }
+
+    video.pause();
+    URL.revokeObjectURL(blobUrl);
+    if (video.parentNode) document.body.removeChild(video);
+    audioCtx.close();
+
+    if (chunks.length === 0) {
+      throw new Error('No audio could be captured from the video');
+    }
+
+    const total = chunks.reduce((s, c) => s + c.length, 0);
+    const combined = new Float32Array(total);
+    let off = 0;
+    for (const c of chunks) { combined.set(c, off); off += c.length; }
+
+    onLog('Captured ' + (combined.length / audioCtx.sampleRate).toFixed(2) + 's of audio, resampling to 16kHz');
+    const resampled = this._resample(combined, audioCtx.sampleRate, TARGET_SAMPLE_RATE);
+    onProgress(100, 'Audio ready');
     return resampled;
   }
 

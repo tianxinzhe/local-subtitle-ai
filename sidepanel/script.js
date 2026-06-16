@@ -533,7 +533,14 @@ async function decodeAudioOnly(file) {
   isExtracting = true;
 
   try {
-    const raw = await audioProcessor.decodeAudioFile(file);
+    const raw = await audioProcessor.decodeAudioFile(file, {
+      onLog: (msg) => console.log('[AudioProcessor]', msg),
+      onProgress: (pct, stage) => {
+        if (stage && stage !== 'progress') {
+          $('extractStatus').textContent = stage;
+        }
+      },
+    });
     audioData = raw;
     console.log('[Step] Audio decoded, amplitude:', getMaxAmplitude(raw).toFixed(6));
     $('extractProgress').classList.add('hidden');
@@ -616,7 +623,14 @@ async function extractAudio(file) {
   setExtractProgress(0, 'Decoding audio...');
 
   try {
-    const raw = await audioProcessor.decodeAudioFile(file);
+    const raw = await audioProcessor.decodeAudioFile(file, {
+      onLog: (msg) => console.log('[AudioProcessor]', msg),
+      onProgress: (pct, stage) => {
+        if (stage && stage !== 'progress') {
+          $('extractStatus').textContent = stage;
+        }
+      },
+    });
     const maxA = getMaxAmplitude(raw);
     console.log('[Step1] Decoded, amplitude:', maxA.toFixed(6), 'samples:', raw.length);
 

@@ -69,6 +69,19 @@ copyDir(ortDist, libsDir, (p) => {
   return name.endsWith('.min.js') || name.endsWith('.wasm') || name.endsWith('.mjs')
 })
 
+console.log('[build] Copying ffmpeg-core → dist/libs/ffmpeg/')
+const ffmpegEsmDist = join(__dirname, 'node_modules/@ffmpeg/core/dist/esm')
+const ffmpegUmdDist = join(__dirname, 'node_modules/@ffmpeg/core/dist/umd')
+const ffmpegDir = join(libsDir, 'ffmpeg')
+mkdirSync(ffmpegDir, { recursive: true })
+if (existsSync(ffmpegEsmDist)) {
+  copyFileSync(join(ffmpegEsmDist, 'ffmpeg-core.js'), join(ffmpegDir, 'ffmpeg-core.js'))
+  copyFileSync(join(ffmpegEsmDist, 'ffmpeg-core.wasm'), join(ffmpegDir, 'ffmpeg-core.wasm'))
+} else if (existsSync(ffmpegUmdDist)) {
+  copyFileSync(join(ffmpegUmdDist, 'ffmpeg-core.js'), join(ffmpegDir, 'ffmpeg-core.js'))
+  copyFileSync(join(ffmpegUmdDist, 'ffmpeg-core.wasm'), join(ffmpegDir, 'ffmpeg-core.wasm'))
+}
+
 async function bundle(entry, outfile) {
   console.log(`[build] Bundling ${entry} → ${outfile}...`)
   await esbuild.build({
