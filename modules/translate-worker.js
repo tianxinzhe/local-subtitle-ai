@@ -7,16 +7,13 @@ let taskQueue = Promise.resolve();
 let currentOptLevel = null;
 
 async function loadModel(modelId, wasmPaths, remoteHost, progressCallback) {
-  // Priority: q8 (small, fast download) → fp16 (medium) → default/fp32 (large fallback)
-  // q8 uses graphOpt=disabled (avoid TransposeDQWeightsForMatMulNBits ORT bug)
-  // fp16/fp32 can use graphOpt=all (no MatMulNBits in these dtypes)
-  // M2M100-418M: only q8 with graphOpt disabled works reliably
-  // - fp16 model file is corrupted at source (InsertedPrecisionFreeCast bug)
-  // - q8 + graphOpt=extended crashes (TransposeDQWeightsForMatMulNBits ORT 1.26.0 bug)
-  // - disabledOptimizers option not recognized by ORT WASM backend
+  // Priority chain for M2M100-418M:
+  // 1. q8+basic — safe (TransposeDQWeightsForMatMulNBits optimizer is in extended level, not basic)
+  // 2. q8+disabled — fallback if basic also crashes
+  // 3. fp32+all — fast but 1.6GB download (fp16 model file corrupted at source)
   const plans = [
+    { dtype: 'q8', optLevel: 'basic' },
     { dtype: 'q8', optLevel: 'disabled' },
-    { dtype: 'fp16', optLevel: 'all' },
     { dtype: 'default', optLevel: 'all' },
   ];
   let lastErr = null;
@@ -64,6 +61,7 @@ self.addEventListener('message', (e) => {
         const texts = payload.texts || [payload.text];
         console.log(`[TranslateWorker] batch=${texts.length}, src=${payload.srcLang} tgt=${payload.tgtLang}`);
 
+        // Individual per-text pipe() calls — faster than batched in ORT WASM
         const translations = [];
         for (let k = 0; k < texts.length; k++) {
           const t0 = performance.now();
@@ -72,7 +70,9 @@ self.addEventListener('message', (e) => {
             tgt_lang: payload.tgtLang,
           });
           const dt = ((performance.now() - t0) / 1000).toFixed(1);
-          console.log(`[TranslateWorker] pipe #${k + 1}/${texts.length}: ${dt}s, len=${texts[k].length}`);
+          if (k % 5 === 0) {
+            console.log(`[TranslateWorker] pipe #${k + 1}/${texts.length}: ${dt}s, len=${texts[k].length}`);
+          }
           translations.push(output[0]?.translation_text || '');
         }
 

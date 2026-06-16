@@ -144,10 +144,10 @@ class TranslationWorkerPool {
   }
 
   async batchTranslate(segments, srcLang, tgtLang, onProgress) {
-    // Batch size: each segment takes ~6s on q8+disabled. 10 segments = ~60s + overhead
-    // Worker recreation adds ~15s per batch, so keep batches small
-    const MAX_BATCH_CHARS = 500;
-    const MAX_BATCH_SEGMENTS = 10;
+    // With batched pipe() call, inference is ~10-20s per 20 texts
+    // Increase batch size to reduce total Worker recreation overhead
+    const MAX_BATCH_CHARS = 1500;
+    const MAX_BATCH_SEGMENTS = 20;
     const total = segments.length;
     const numWorkers = this._workers.length;
     const allBatches = [];
@@ -166,7 +166,7 @@ class TranslationWorkerPool {
       allBatches.push(batch);
     }
     console.log(`[batchTranslate] ${total} segs → ${allBatches.length} batches, ${numWorkers} workers`);
-    const workerChains = Array.from({ length: numWorkers }, () => ({ batches: [], results: [] }));
+    const workerChains = Array.from({ length: numWorkers }, () => ({ batches: [], results: [], callsSinceRecreate: 0 }));
     allBatches.forEach((batch, idx) => {
       workerChains[idx % numWorkers].batches.push(batch);
     });
@@ -178,14 +178,16 @@ class TranslationWorkerPool {
       let chainPromise = Promise.resolve();
       for (const batch of chain.batches) {
         chainPromise = chainPromise.then(async () => {
-          // Recreate worker if previous batch corrupted the WASM state
-          // (skip first batch per worker - worker is fresh from init)
-          if (chain.results.length > 0 && this._workers[workerIdx]) {
-            this._workers[workerIdx].terminate();
-            const freshWorker = new Worker(workerUrl, { type: 'module' });
-            this._setupWorker(freshWorker, workerIdx);
-            this._workers[workerIdx] = freshWorker;
-            await this._sendTo(workerIdx, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 120000);
+          // Recreate worker every 80 pipe() calls to avoid ORT WASM deadlock (~100 threshold)
+          if (chain.callsSinceRecreate >= 80) {
+            if (this._workers[workerIdx]) {
+              this._workers[workerIdx].terminate();
+              const freshWorker = new Worker(workerUrl, { type: 'module' });
+              this._setupWorker(freshWorker, workerIdx);
+              this._workers[workerIdx] = freshWorker;
+              await this._sendTo(workerIdx, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 120000);
+            }
+            chain.callsSinceRecreate = 0;
           }
 
           const texts = batch.map(s => s.original);
@@ -197,7 +199,8 @@ class TranslationWorkerPool {
               console.error(`[batchTranslate] w${workerIdx} expected ${batch.length} translations, got ${res.translations?.length}`);
               throw new Error('Translation count mismatch');
             }
-            console.log(`[batchTranslate] w${workerIdx} batch=${batch.length} ok, non-empty=${res.translations.filter(t => t.length > 0).length}`);
+            chain.callsSinceRecreate += batch.length;
+            console.log(`[batchTranslate] w${workerIdx} batch=${batch.length} ok, calls=${chain.callsSinceRecreate}, non-empty=${res.translations.filter(t => t.length > 0).length}`);
             for (let j = 0; j < batch.length; j++) {
               chain.results.push({
                 ...batch[j],
@@ -243,11 +246,15 @@ class TranslationWorkerPool {
 class GeminiEngine {
   async _checkAvailable() {
     try {
-      // Chrome 138+: window.Translator (new API)
-      if (typeof Translator !== 'undefined' && Translator.canTranslate) {
+      // Chrome 138+: window.Translator (stable)
+      if (typeof Translator !== 'undefined') {
+        if (typeof Translator.availability === 'function') {
+          const status = await Translator.availability({ sourceLanguage: 'en', targetLanguage: 'zh' });
+          return status !== 'no';
+        }
         return true;
       }
-      // Chrome 131-137: window.ai.translator (old API)
+      // Chrome 131-137: window.ai.translator (experimental)
       const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
       if (ai && ai.translator) {
         const caps = await ai.translator.capabilities();
@@ -260,9 +267,12 @@ class GeminiEngine {
   async _canTranslate(source, target) {
     try {
       // Chrome 138+: window.Translator
-      if (typeof Translator !== 'undefined' && Translator.canTranslate) {
-        const r = await Translator.canTranslate({ sourceLanguage: source, targetLanguage: target });
-        return r === 'readily' || r === 'after-download';
+      if (typeof Translator !== 'undefined') {
+        if (typeof Translator.availability === 'function') {
+          const status = await Translator.availability({ sourceLanguage: source, targetLanguage: target });
+          return status === 'readily' || status === 'after-download';
+        }
+        return true;
       }
       // Chrome 131-137: window.ai.translator
       const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
@@ -411,12 +421,20 @@ class Translator {
     try {
       let available = false;
       let detail = '';
-      if (typeof Translator !== 'undefined' && Translator.canTranslate) {
-        const r = await Translator.canTranslate({ sourceLanguage: 'en', targetLanguage: 'zh' });
-        if (r === 'readily') { available = true; detail = 'Ready'; }
-        else if (r === 'after-download') { available = true; detail = 'Model needs download (enable chrome://flags/#translation-api)'; }
-        else { detail = 'Not available for this language pair'; }
-      } else if (typeof ai !== 'undefined' && ai?.translator) {
+      if (typeof Translator !== 'undefined') {
+        try {
+          if (typeof Translator.availability === 'function') {
+            const r = await Translator.availability({ sourceLanguage: 'en', targetLanguage: 'zh' });
+            if (r === 'readily') { available = true; detail = 'Ready'; }
+            else if (r === 'after-download') { available = true; detail = 'Model will download on first use'; }
+            else { detail = 'Not available for this language pair'; }
+          } else {
+            available = true;
+            detail = 'Available';
+          }
+        } catch (e) {
+          detail = `Error: ${e.message}`;
+        }
         const caps = await ai.translator.capabilities();
         if (caps.available !== 'no') { available = true; detail = 'Ready'; }
         else { detail = 'Gemini Nano not downloaded. Enable chrome://flags/#optimization-guide-on-device-model'; }
