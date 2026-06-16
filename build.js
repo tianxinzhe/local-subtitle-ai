@@ -72,6 +72,7 @@ copyDir(ortDist, libsDir, (p) => {
 console.log('[build] Copying ffmpeg-core → dist/libs/ffmpeg/')
 const ffmpegEsmDist = join(__dirname, 'node_modules/@ffmpeg/core/dist/esm')
 const ffmpegUmdDist = join(__dirname, 'node_modules/@ffmpeg/core/dist/umd')
+const ffmpegWorkerSrc = join(__dirname, 'node_modules/@ffmpeg/ffmpeg/dist/esm')
 const ffmpegDir = join(libsDir, 'ffmpeg')
 mkdirSync(ffmpegDir, { recursive: true })
 if (existsSync(ffmpegEsmDist)) {
@@ -80,6 +81,14 @@ if (existsSync(ffmpegEsmDist)) {
 } else if (existsSync(ffmpegUmdDist)) {
   copyFileSync(join(ffmpegUmdDist, 'ffmpeg-core.js'), join(ffmpegDir, 'ffmpeg-core.js'))
   copyFileSync(join(ffmpegUmdDist, 'ffmpeg-core.wasm'), join(ffmpegDir, 'ffmpeg-core.wasm'))
+}
+
+// Copy ffmpeg worker + its dependencies for classWorkerURL
+if (existsSync(ffmpegWorkerSrc)) {
+  for (const f of ['worker.js', 'const.js', 'errors.js', 'utils.js']) {
+    const src = join(ffmpegWorkerSrc, f)
+    if (existsSync(src)) copyFileSync(src, join(ffmpegDir, f))
+  }
 }
 
 async function bundle(entry, outfile) {

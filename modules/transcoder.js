@@ -25,16 +25,33 @@ async function getFFmpeg(onProgress) {
     const coreWasm = coreURL('ffmpeg-core.wasm');
     console.log('[ffmpeg] loading core:', coreJs, coreWasm);
 
+    // Verify the core URL is reachable from the main thread before passing to worker
     try {
-      await ff.load({
+      const head = await fetch(coreJs, { method: 'HEAD' });
+      console.log('[ffmpeg] core HEAD:', head.status, head.headers.get('content-length'));
+      if (!head.ok) throw new Error('core HEAD not ok: ' + head.status);
+    } catch (e) {
+      console.error('[ffmpeg] core URL fetch failed:', e);
+      throw new Error('Cannot reach ' + coreJs + ': ' + e.message);
+    }
+
+    try {
+      const loadPromise = ff.load({
         coreURL: coreJs,
         wasmURL: coreWasm,
+        classWorkerURL: chrome.runtime.getURL('libs/ffmpeg/worker.js'),
       });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('ffmpeg load timeout (30s)')), 30000)
+      );
+      await Promise.race([loadPromise, timeoutPromise]);
     } catch (e) {
       console.error('[ffmpeg] load failed:', e);
+      try { ff.terminate(); } catch {}
       throw new Error('ffmpeg-core load failed: ' + (e?.message || e));
     }
 
+    console.log('[ffmpeg] core loaded successfully');
     _ffmpeg = ff;
     return ff;
   })();
