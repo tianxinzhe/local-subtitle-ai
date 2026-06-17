@@ -191,26 +191,48 @@ class TranslationWorkerPool {
           }
 
           const texts = batch.map(s => s.original);
-          try {
-            const res = await this._sendTo(workerIdx, 'translate', {
-              texts, srcLang, tgtLang,
-            }, 180000);
-            if (!res.translations || res.translations.length !== batch.length) {
-              console.error(`[batchTranslate] w${workerIdx} expected ${batch.length} translations, got ${res.translations?.length}`);
-              throw new Error('Translation count mismatch');
-            }
-            chain.callsSinceRecreate += batch.length;
-            console.log(`[batchTranslate] w${workerIdx} batch=${batch.length} ok, calls=${chain.callsSinceRecreate}, non-empty=${res.translations.filter(t => t.length > 0).length}`);
-            for (let j = 0; j < batch.length; j++) {
-              chain.results.push({
-                ...batch[j],
-                translation: res.translations[j] || '',
-              });
-            }
-          } catch (err) {
-            console.error(`[batchTranslate] w${workerIdx} batch failed:`, err?.message || err);
-            for (const seg of batch) {
-              chain.results.push({ ...seg, translation: '' });
+          let retries = 0;
+          const MAX_RETRIES = 1;
+          while (retries <= MAX_RETRIES) {
+            try {
+              const res = await this._sendTo(workerIdx, 'translate', {
+                texts, srcLang, tgtLang,
+              }, 180000);
+              if (!res.translations || res.translations.length !== batch.length) {
+                console.error(`[batchTranslate] w${workerIdx} expected ${batch.length} translations, got ${res.translations?.length}`);
+                throw new Error('Translation count mismatch');
+              }
+              chain.callsSinceRecreate += batch.length;
+              console.log(`[batchTranslate] w${workerIdx} batch=${batch.length} ok, calls=${chain.callsSinceRecreate}, non-empty=${res.translations.filter(t => t.length > 0).length}`);
+              for (let j = 0; j < batch.length; j++) {
+                chain.results.push({
+                  ...batch[j],
+                  translation: res.translations[j] || '',
+                });
+              }
+              break;
+            } catch (err) {
+              retries++;
+              if (retries <= MAX_RETRIES) {
+                console.warn(`[batchTranslate] w${workerIdx} batch failed (retry ${retries}/${MAX_RETRIES}):`, err?.message || err);
+                // Recreate worker and reload model before retry
+                try {
+                  this._workers[workerIdx].terminate();
+                  const freshWorker = new Worker(workerUrl, { type: 'module' });
+                  this._setupWorker(freshWorker, workerIdx);
+                  this._workers[workerIdx] = freshWorker;
+                  await this._sendTo(workerIdx, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 120000);
+                  chain.callsSinceRecreate = 0;
+                } catch (loadErr) {
+                  console.error(`[batchTranslate] w${workerIdx} reload failed:`, loadErr?.message);
+                  break;
+                }
+              } else {
+                console.error(`[batchTranslate] w${workerIdx} batch failed after ${MAX_RETRIES} retries:`, err?.message || err);
+                for (const seg of batch) {
+                  chain.results.push({ ...seg, translation: '' });
+                }
+              }
             }
           }
           if (onProgress) {
@@ -246,13 +268,13 @@ class TranslationWorkerPool {
 class GeminiEngine {
   async _checkAvailable() {
     try {
-      // Chrome 138+: window.Translator (stable)
+      // Chrome 138+: window.Translator — need BOTH availability() and create()
       if (typeof Translator !== 'undefined') {
-        if (typeof Translator.availability === 'function') {
+        if (typeof Translator.availability === 'function' && typeof Translator.create === 'function') {
           const status = await Translator.availability({ sourceLanguage: 'en', targetLanguage: 'zh' });
           return status !== 'no';
         }
-        return true;
+        return false;
       }
       // Chrome 131-137: window.ai.translator (experimental)
       const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
@@ -286,7 +308,7 @@ class GeminiEngine {
 
   async translate(text, sourceLang, targetLang) {
     // Chrome 138+: window.Translator
-    if (typeof Translator !== 'undefined' && Translator.create) {
+    if (typeof Translator !== 'undefined' && typeof Translator.create === 'function') {
       const t = await Translator.create({
         sourceLanguage: sourceLang,
         targetLanguage: targetLang,
@@ -294,11 +316,15 @@ class GeminiEngine {
       return t.translate(text);
     }
     // Chrome 131-137: window.ai.translator
-    const t = await window.ai.translator.create({
-      sourceLanguage: sourceLang,
-      targetLanguage: targetLang,
-    });
-    return t.translate(text);
+    const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
+    if (ai && ai.translator) {
+      const t = await ai.translator.create({
+        sourceLanguage: sourceLang,
+        targetLanguage: targetLang,
+      });
+      return t.translate(text);
+    }
+    throw new Error('Translation API not available');
   }
 }
 
@@ -355,8 +381,13 @@ class Translator {
       if (this._engine === 'gemini-nano') {
         const ok = await this._gemini._canTranslate(sourceLang, targetLang);
         if (ok) return this._gemini.translate(text, sourceLang, targetLang);
-        console.warn('[Translator] Gemini cannot translate this pair');
-        return text;
+        // Fall back to M2M100
+        console.warn(`[Translator] Gemini Nano doesn't support ${sourceLang}→${targetLang}, falling back to M2M100`);
+        if (!this._workerPool || !this._workerPool.isReady()) {
+          this._workerPool = new TranslationWorkerPool();
+          await this._workerPool.init(() => {});
+        }
+        return this._workerPool.translate(text, sourceLang, targetLang);
       }
       return this._workerPool.translate(text, sourceLang, targetLang);
     } catch (err) {
@@ -378,7 +409,6 @@ class Translator {
       if (this._engine === 'gemini-nano') {
         const ok = await this._gemini._canTranslate(sourceLang, targetLang);
         if (ok) {
-          // Gemini: process sequentially (no worker pool)
           const results = [];
           for (let i = 0; i < segments.length; i++) {
             const t = await this._gemini.translate(segments[i].original, sourceLang, targetLang);
@@ -387,7 +417,14 @@ class Translator {
           }
           return results;
         }
-        return segments.map(s => ({ ...s, translation: '' }));
+        // Gemini Nano doesn't support this pair — fall back to M2M100
+        console.warn(`[Translator] Gemini Nano doesn't support ${sourceLang}→${targetLang}, falling back to M2M100`);
+        if (!this._workerPool || !this._workerPool.isReady()) {
+          if (onProgress) onProgress(0, 'Loading M2M100-418M fallback...');
+          this._workerPool = new TranslationWorkerPool();
+          await this._workerPool.init(onProgress);
+        }
+        return this._workerPool.batchTranslate(segments, sourceLang, targetLang, onProgress);
       }
       return this._workerPool.batchTranslate(segments, sourceLang, targetLang, onProgress);
     } catch (err) {
@@ -435,11 +472,20 @@ class Translator {
         } catch (e) {
           detail = `Error: ${e.message}`;
         }
-        const caps = await ai.translator.capabilities();
-        if (caps.available !== 'no') { available = true; detail = 'Ready'; }
-        else { detail = 'Gemini Nano not downloaded. Enable chrome://flags/#optimization-guide-on-device-model'; }
       } else {
-        detail = 'Not supported in this Chrome version (need 131+)';
+        // Chrome 131-137: window.ai.translator (experimental)
+        const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
+        if (ai && ai.translator) {
+          try {
+            const caps = await ai.translator.capabilities();
+            if (caps.available !== 'no') { available = true; detail = 'Ready'; }
+            else { detail = 'Gemini Nano not downloaded. Enable chrome://flags/#optimization-guide-on-device-model'; }
+          } catch (e) {
+            detail = `Error: ${e.message}`;
+          }
+        } else {
+          detail = 'Not supported in this Chrome version (need 131+)';
+        }
       }
       results.push({ engine: 'Chrome Translator (Gemini Nano)', available, detail });
     } catch (e) {
