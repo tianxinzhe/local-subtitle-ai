@@ -231,8 +231,8 @@ class WhisperWorkerEngine {
     const perWorkerMB = { tiny: 150, base: 250, small: 500, medium: 900, 'large-v3-turbo': 1200, 'large-v3': 1800 };
     const perWorker = perWorkerMB[model] || 300;
     const maxByMem = Math.max(1, Math.floor((memGB * 1024 * 0.6) / perWorker));
-    const maxByCpu = Math.max(1, Math.floor(cpuCores * 0.9));
-    return Math.min(maxByMem, maxByCpu, 6);
+    const maxByCpu = Math.max(1, Math.floor(cpuCores * 0.5));
+    return Math.min(maxByMem, maxByCpu, 4);
   }
 
   async load(options = {}) {
@@ -424,18 +424,21 @@ class WhisperWorkerEngine {
     }
 
     const SAMPLE_RATE = 16000;
-    const CHUNK_SEC = 120;
+    const CHUNK_SEC = 30;
     const chunkSize = CHUNK_SEC * SAMPLE_RATE;
     const totalChunks = Math.ceil(input.length / chunkSize);
     const numWorkers = this._workers.length;
 
-    // Build chunk list
+    // Build chunk list (each chunk needs its own ArrayBuffer for transfer)
     const chunks = [];
     for (let offset = 0; offset < input.length; offset += chunkSize) {
       const end = Math.min(offset + chunkSize, input.length);
+      const slice = input.slice(offset, end);
+      const copy = new Float32Array(slice.length);
+      copy.set(slice);
       chunks.push({
         id: chunks.length,
-        data: input.slice(offset, end),
+        data: copy,
         offsetSec: offset / SAMPLE_RATE,
         durSec: (end - offset) / SAMPLE_RATE,
       });

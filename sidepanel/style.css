@@ -156,6 +156,15 @@ header {
 .engine-info-check.fail { color: var(--error); }
 .engine-info-name { font-weight: 600; color: var(--text-primary); }
 .engine-info-detail { color: var(--text-dim); font-size: 11px; }
+.engine-info-flag {
+  color: var(--warning, #f0a020);
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+  display: inline-block;
+  margin-top: 2px;
+}
+.engine-info-flag:hover { color: var(--accent, #4a9eff); }
 
 .primary-btn {
   position: relative;

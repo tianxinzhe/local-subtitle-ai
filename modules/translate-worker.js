@@ -38,6 +38,7 @@ async function loadModel(modelId, wasmPaths, remoteHost, progressCallback) {
 
 self.addEventListener('message', (e) => {
   const { msgId, type, payload } = e.data;
+  console.log(`[TranslateWorker] RECEIVED msgId=${msgId} type=${type}`);
 
   taskQueue = taskQueue.then(async () => {
     try {

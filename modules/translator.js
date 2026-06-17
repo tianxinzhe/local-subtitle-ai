@@ -134,6 +134,7 @@ class TranslationWorkerPool {
         workerIdx,
       });
 
+      console.log(`[_sendTo] worker=${workerIdx} type=${type} msgId=${msgId} timeout=${timeoutMs}ms`);
       this._workers[workerIdx].postMessage({ msgId, type, payload });
     });
   }
@@ -174,10 +175,26 @@ class TranslationWorkerPool {
     const workerUrl = chrome.runtime.getURL('modules/translate-worker.js');
     const wasmPaths = chrome.runtime.getURL('libs/');
 
+    // Recreate ALL workers before batch processing to avoid WASM deadlock from prior state
+    console.log(`[batchTranslate] Recreating ${numWorkers} workers for fresh state`);
+    for (let wi = 0; wi < numWorkers; wi++) {
+      if (this._workers[wi]) this._workers[wi].terminate();
+      const freshWorker = new Worker(workerUrl, { type: 'module' });
+      this._setupWorker(freshWorker, wi);
+      this._workers[wi] = freshWorker;
+    }
+    // Load model on all workers sequentially
+    for (let wi = 0; wi < numWorkers; wi++) {
+      await this._sendTo(wi, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 120000);
+      console.log(`[batchTranslate] w${wi} model reloaded`);
+    }
+
     const workerPromises = workerChains.map((chain, workerIdx) => {
+      console.log(`[batchTranslate] w${workerIdx}: ${chain.batches.length} batches total`);
       let chainPromise = Promise.resolve();
-      for (const batch of chain.batches) {
+      chain.batches.forEach((batch, bi) => {
         chainPromise = chainPromise.then(async () => {
+          console.log(`[batchTranslate] w${workerIdx} starting batch ${bi} (${batch.length} segs)`);
           // Recreate worker every 80 pipe() calls to avoid ORT WASM deadlock (~100 threshold)
           if (chain.callsSinceRecreate >= 80) {
             if (this._workers[workerIdx]) {
@@ -240,7 +257,7 @@ class TranslationWorkerPool {
             onProgress(Math.min(100, Math.round(done / total * 100)));
           }
         });
-      }
+      });
       return chainPromise;
     });
 
@@ -266,64 +283,143 @@ class TranslationWorkerPool {
 }
 
 class GeminiEngine {
+  constructor() {
+    this._translator = null;
+    this._ready = false;
+    this._lastError = '';
+  }
+
+  _getAI() {
+    // 扩展 sidepanel / service worker / popup 都能用 self.ai
+    const ai = (typeof self !== 'undefined' && self.ai) 
+            || (typeof window !== 'undefined' && window.ai);
+    return ai;
+  }
+
   async _checkAvailable() {
-    try {
-      // Chrome 138+: window.Translator — need BOTH availability() and create()
-      if (typeof Translator !== 'undefined') {
-        if (typeof Translator.availability === 'function' && typeof Translator.create === 'function') {
-          const status = await Translator.availability({ sourceLanguage: 'en', targetLanguage: 'zh' });
-          return status !== 'no';
-        }
-        return false;
-      }
-      // Chrome 131-137: window.ai.translator (experimental)
-      const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
-      if (ai && ai.translator) {
+    // 诊断：打印所有相关全局对象
+    console.log('[Gemini] === Built-in AI 诊断 ===');
+    console.log('[Gemini] typeof self.ai:', typeof (typeof self !== 'undefined' ? self.ai : undefined));
+    console.log('[Gemini] typeof window.ai:', typeof (typeof window !== 'undefined' ? window.ai : undefined));
+    console.log('[Gemini] typeof Translator:', typeof (typeof self !== 'undefined' ? self.Translator : undefined));
+    console.log('[Gemini] typeof LanguageModel:', typeof (typeof self !== 'undefined' ? self.LanguageModel : undefined));
+    
+    const ai = this._getAI();
+    if (ai) {
+      console.log('[Gemini] self.ai 存在, keys:', Object.keys(ai));
+    } else {
+      console.log('[Gemini] ✗ self.ai 不存在');
+      console.log('[Gemini] 提示: 需要在 chrome://flags/ 启用 #prompt-api-for-gemini-nano');
+    }
+
+    // 路径 1: self.ai.translator (Chrome 131-138+ 标准路径)
+    if (ai && ai.translator) {
+      console.log('[Gemini] ✓ 找到 self.ai.translator');
+      try {
         const caps = await ai.translator.capabilities();
-        return caps && caps.available !== 'no';
+        console.log('[Gemini] capabilities:', JSON.stringify(caps));
+        if (caps.available === 'readily' || caps.available === 'after-download') {
+          this._ready = true;
+          this._lastError = '';
+          console.log('[Gemini] ✓ self.ai.translator 可用');
+          return true;
+        }
+        if (caps.available === 'downloadable') {
+          console.log('[Gemini] → 模型可下载,准备创建触发下载');
+          this._ready = true;
+          return true;
+        }
+        this._lastError = `self.ai.translator unavailable: ${caps.available}`;
+        console.log('[Gemini] ✗ self.ai.translator 不可用:', caps.available);
+      } catch (e) {
+        console.warn('[Gemini] self.ai.translator.capabilities() 失败:', e.message);
+        this._lastError = e.message;
+      }
+    }
+
+    // 路径 2: window.Translator (Chrome 138+ 实验性)
+    const T = (typeof self !== 'undefined' && self.Translator) 
+           || (typeof window !== 'undefined' && window.Translator);
+    if (T && typeof T.create === 'function') {
+      console.log('[Gemini] 找到 window.Translator,尝试 create()...');
+      try {
+        this._translator = await T.create({ sourceLanguage: 'en', targetLanguage: 'zh' });
+        this._ready = true;
+        this._lastError = '';
+        console.log('[Gemini] ✓ window.Translator.create() 成功');
+        return true;
+      } catch (e) {
+        console.warn('[Gemini] window.Translator.create() 失败:', e.message);
+        this._lastError = e.message;
+      }
+    }
+
+    console.log('[Gemini] ✗ 所有翻译 API 路径都失败');
+    console.log('[Gemini] 请检查:');
+    console.log('[Gemini]   1. chrome://flags/#prompt-api-for-gemini-nano = Enabled');
+    console.log('[Gemini]   2. chrome://components/ → Optimization Guide On Device Model 已下载');
+    return false;
+  }
+
+  async _canTranslate(source, target) {
+    try {
+      const ai = this._getAI();
+      // 路径 1: self.ai.translator
+      if (ai && ai.translator) {
+        if (this._translator) return true;
+        try {
+          this._translator = await ai.translator.create({ sourceLanguage: source, targetLanguage: target });
+          return true;
+        } catch (e) {
+          console.warn('[Gemini] self.ai.translator.create 失败:', e.message);
+          return false;
+        }
+      }
+      // 路径 2: window.Translator
+      const T = (typeof self !== 'undefined' && self.Translator) 
+             || (typeof window !== 'undefined' && window.Translator);
+      if (T && typeof T.create === 'function') {
+        if (this._translator) return true;
+        try {
+          this._translator = await T.create({ sourceLanguage: source, targetLanguage: target });
+          return true;
+        } catch {
+          return false;
+        }
       }
       return false;
     } catch { return false; }
   }
 
-  async _canTranslate(source, target) {
-    try {
-      // Chrome 138+: window.Translator
-      if (typeof Translator !== 'undefined') {
-        if (typeof Translator.availability === 'function') {
-          const status = await Translator.availability({ sourceLanguage: source, targetLanguage: target });
-          return status === 'readily' || status === 'after-download';
-        }
-        return true;
-      }
-      // Chrome 131-137: window.ai.translator
-      const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
-      if (!ai || !ai.translator) return false;
-      const caps = await ai.translator.capabilities();
-      if (!caps || !caps.canTranslate) return false;
-      const r = await caps.canTranslate({ sourceLanguage: source, targetLanguage: target });
-      return r === 'readily' || r === 'after-download';
-    } catch { return false; }
-  }
-
   async translate(text, sourceLang, targetLang) {
-    // Chrome 138+: window.Translator
-    if (typeof Translator !== 'undefined' && typeof Translator.create === 'function') {
-      const t = await Translator.create({
-        sourceLanguage: sourceLang,
-        targetLanguage: targetLang,
-      });
-      return t.translate(text);
+    // 复用已创建的实例
+    if (this._translator) {
+      return this._translator.translate(text);
     }
-    // Chrome 131-137: window.ai.translator
-    const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
+
+    // 路径 1: self.ai.translator
+    const ai = this._getAI();
     if (ai && ai.translator) {
-      const t = await ai.translator.create({
+      console.log('[Gemini] 创建 self.ai.translator 实例...');
+      this._translator = await ai.translator.create({
         sourceLanguage: sourceLang,
         targetLanguage: targetLang,
       });
-      return t.translate(text);
+      return this._translator.translate(text);
     }
+
+    // 路径 2: window.Translator
+    const T = (typeof self !== 'undefined' && self.Translator) 
+           || (typeof window !== 'undefined' && window.Translator);
+    if (T && typeof T.create === 'function') {
+      console.log('[Gemini] 创建 window.Translator 实例...');
+      this._translator = await T.create({
+        sourceLanguage: sourceLang,
+        targetLanguage: targetLang,
+      });
+      return this._translator.translate(text);
+    }
+
     throw new Error('Translation API not available');
   }
 }
@@ -408,13 +504,21 @@ class Translator {
     try {
       if (this._engine === 'gemini-nano') {
         const ok = await this._gemini._canTranslate(sourceLang, targetLang);
+        console.log(`[Translator] Gemini _canTranslate(${sourceLang}→${targetLang}) = ${ok}`);
         if (ok) {
           const results = [];
           for (let i = 0; i < segments.length; i++) {
-            const t = await this._gemini.translate(segments[i].original, sourceLang, targetLang);
-            results.push({ ...segments[i], translation: t || '' });
+            try {
+              const t = await this._gemini.translate(segments[i].original, sourceLang, targetLang);
+              results.push({ ...segments[i], translation: t || '' });
+            } catch (e) {
+              console.warn(`[Translator] Gemini translate #${i} failed:`, e.message);
+              results.push({ ...segments[i], translation: '' });
+            }
             if (onProgress) onProgress(Math.round((i + 1) / segments.length * 100));
           }
+          const nonEmpty = results.filter(r => r.translation).length;
+          console.log(`[Translator] Gemini done: ${nonEmpty}/${results.length} translated`);
           return results;
         }
         // Gemini Nano doesn't support this pair — fall back to M2M100
@@ -458,38 +562,63 @@ class Translator {
     try {
       let available = false;
       let detail = '';
-      if (typeof Translator !== 'undefined') {
+      let flagNeeded = false;
+      const ai = (typeof self !== 'undefined' && self.ai) 
+              || (typeof window !== 'undefined' && window.ai);
+      
+      // 路径 1: self.ai.translator (Chrome 131-138+ 标准)
+      if (ai && ai.translator) {
         try {
-          if (typeof Translator.availability === 'function') {
-            const r = await Translator.availability({ sourceLanguage: 'en', targetLanguage: 'zh' });
-            if (r === 'readily') { available = true; detail = 'Ready'; }
-            else if (r === 'after-download') { available = true; detail = 'Model will download on first use'; }
-            else { detail = 'Not available for this language pair'; }
+          const caps = await ai.translator.capabilities();
+          if (caps.available === 'readily') {
+            available = true; detail = 'Ready';
+          } else if (caps.available === 'after-download') {
+            available = true; detail = 'Model will download on first use';
+          } else if (caps.available === 'downloadable') {
+            available = true; detail = 'Model downloading...';
           } else {
-            available = true;
-            detail = 'Available';
+            detail = `Status: ${caps.available}`;
           }
         } catch (e) {
           detail = `Error: ${e.message}`;
         }
-      } else {
-        // Chrome 131-137: window.ai.translator (experimental)
-        const ai = typeof window !== 'undefined' ? window.ai : (typeof self !== 'undefined' ? self.ai : null);
-        if (ai && ai.translator) {
+      }
+      // 路径 2: window.Translator (Chrome 138+ 实验性)
+      else if (typeof Translator !== 'undefined') {
+        if (typeof Translator.availability === 'function') {
           try {
-            const caps = await ai.translator.capabilities();
-            if (caps.available !== 'no') { available = true; detail = 'Ready'; }
-            else { detail = 'Gemini Nano not downloaded. Enable chrome://flags/#optimization-guide-on-device-model'; }
+            const r = await Translator.availability({ sourceLanguage: 'en', targetLanguage: 'zh' });
+            if (r === 'readily') { available = true; detail = 'Ready'; }
+            else if (r === 'after-download') { available = true; detail = 'Model will download on first use'; }
+            else { detail = `Status: ${r}`; }
           } catch (e) {
             detail = `Error: ${e.message}`;
           }
         } else {
-          detail = 'Not supported in this Chrome version (need 131+)';
+          detail = 'API not ready';
         }
       }
-      results.push({ engine: 'Chrome Translator (Gemini Nano)', available, detail });
+      // 两个都没有
+      else {
+        flagNeeded = true;
+        detail = '⚠️ Enable chrome://flags/#prompt-api-for-gemini-nano';
+      }
+      
+      results.push({ 
+        engine: 'Chrome Translator (Gemini Nano)', 
+        available, 
+        detail,
+        flagNeeded,
+        flagUrl: 'chrome://flags/#prompt-api-for-gemini-nano'
+      });
     } catch (e) {
-      results.push({ engine: 'Chrome Translator (Gemini Nano)', available: false, detail: `Error: ${e.message}` });
+      results.push({ 
+        engine: 'Chrome Translator (Gemini Nano)', 
+        available: false, 
+        detail: `Error: ${e.message}`,
+        flagNeeded: true,
+        flagUrl: 'chrome://flags/#prompt-api-for-gemini-nano'
+      });
     }
     // M2M100-418M
     try {

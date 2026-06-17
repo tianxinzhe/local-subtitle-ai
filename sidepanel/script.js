@@ -95,11 +95,14 @@ async function populateEngineInfo() {
 
   listEl.innerHTML = engines.map(e => {
     const ok = e.available;
+    const flagLink = e.flagNeeded && e.flagUrl
+      ? `<a href="${e.flagUrl}" target="_blank" class="engine-info-flag">${e.detail} (click to open)</a>`
+      : `<div class="engine-info-detail">${e.detail}</div>`;
     return `<div class="engine-info-item">
       <span class="engine-info-check ${ok ? 'ok' : 'fail'}">${ok ? '✓' : '✗'}</span>
       <div>
         <div class="engine-info-name">${e.engine}</div>
-        <div class="engine-info-detail">${e.detail}</div>
+        ${flagLink}
       </div>
     </div>`;
   }).join('');
