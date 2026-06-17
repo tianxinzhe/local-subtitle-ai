@@ -21,6 +21,21 @@ let fullSpeedMode = false;
 let captureStream = null;
 let captureAudioContext = null;
 
+// Whisper initial-prompt presets. Whisper uses the prompt as preceding
+// context to bias recognition toward domain terminology, proper nouns,
+// and speaking style. Keep these short (< ~200 tokens) and lowercase
+// punctuation is fine — Whisper handles mixed casing.
+const PROMPT_PRESETS = {
+  general: '',
+  tech: 'Discussion covers software engineering, machine learning, neural networks, transformers, large language models, APIs, databases, cloud infrastructure, distributed systems, algorithms, Python, JavaScript, GPU, CUDA, quantization, fine-tuning, inference, embeddings, vector databases, RAG, agents.',
+  medical: 'Clinical discussion covers patient history, diagnosis, symptoms, treatment, medication, dosage, surgery, anesthesia, cardiology, oncology, pathology, radiology, MRI, CT scan, blood pressure, laboratory results, prognosis, follow-up care.',
+  legal: 'Court proceedings and legal discussion involving attorneys, witnesses, defendants, plaintiffs, evidence, objections, testimony, cross-examination, ruling, motion, deposition, contract, liability, statute, jurisdiction, precedent, verdict.',
+  finance: 'Financial markets discussion covering stocks, bonds, equities, derivatives, options, futures, Forex, cryptocurrency, Bitcoin, Ethereum, central bank, Federal Reserve, interest rates, inflation, GDP, earnings, P/E ratio, market cap, portfolio, hedge fund, asset allocation.',
+  education: 'Lecture and educational content with clear explanations of concepts, definitions, theorems, examples, exercises, homework, students, professor, syllabus, curriculum, mathematics, physics, chemistry, biology, history, philosophy.',
+  interview: 'Podcast interview with guest introduction, personal background, career journey, opinions, anecdotes, advice, follow-up questions, conversational tone, laughter, pauses, thank you for joining us today.',
+  gaming: 'Gaming livestream and commentary covering gameplay, walkthrough, strategy, speedrun, boss fight, multiplayer, FPS, RPG, MOBA, console, PC, Steam, DLC, patch notes, meta, build, loadout, kill death ratio.',
+};
+
 const $ = (id) => document.getElementById(id);
 
 // Yield to the browser so it can paint pending DOM/style changes before we
@@ -182,6 +197,16 @@ async function loadSettings() {
   $('settingFontColor').value = config.subtitleColor || '#FFD700';
   $('settingBgOpacity').value = config.subtitleBgOpacity || 0.6;
 
+  // Whisper prompt (UI-only state for now; not yet wired to worker)
+  if (config.whisperPromptPreset) {
+    $('promptPreset').value = config.whisperPromptPreset;
+  }
+  if (config.whisperPrompt) {
+    $('promptCustom').value = config.whisperPrompt;
+  } else if (config.whisperPromptPreset && config.whisperPromptPreset !== 'custom' && config.whisperPromptPreset !== 'general') {
+    $('promptCustom').value = PROMPT_PRESETS[config.whisperPromptPreset] || '';
+  }
+
   updateLangToggle();
 }
 
@@ -251,6 +276,28 @@ function setupEventListeners() {
         updates: { targetLanguage: val },
       });
     } catch {}
+  });
+
+  // Whisper prompt (initial context) — UI only, not wired to worker yet
+  $('promptToggle').addEventListener('click', () => {
+    const body = $('promptBody');
+    const section = $('promptToggle').parentElement;
+    body.classList.toggle('hidden');
+    section.classList.toggle('open', !body.classList.contains('hidden'));
+  });
+
+  $('promptPreset').addEventListener('change', () => {
+    const val = $('promptPreset').value;
+    if (val !== 'custom') {
+      $('promptCustom').value = PROMPT_PRESETS[val] || '';
+    }
+  });
+
+  $('promptCustom').addEventListener('input', () => {
+    saveConfig({ whisperPrompt: $('promptCustom').value, whisperPromptPreset: $('promptPreset').value });
+  });
+  $('promptPreset').addEventListener('change', () => {
+    saveConfig({ whisperPrompt: $('promptCustom').value, whisperPromptPreset: $('promptPreset').value });
   });
 
   $('exportBtn').addEventListener('click', exportSrt);

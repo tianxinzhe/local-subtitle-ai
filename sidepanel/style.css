@@ -252,6 +252,60 @@ header {
   text-transform: uppercase; letter-spacing: 0.5px;
 }
 
+.prompt-section {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+.prompt-toggle {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.prompt-toggle:hover { background: var(--bg-hover); }
+.prompt-arrow {
+  font-size: 10px;
+  color: var(--text-dim);
+  transition: transform 0.2s;
+}
+.prompt-section.open .prompt-arrow { transform: rotate(90deg); }
+.prompt-body {
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.prompt-presets {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.prompt-presets select { flex: 1; }
+#promptCustom {
+  width: 100%;
+  min-height: 60px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+#promptCustom:focus { border-color: var(--accent); }
+.prompt-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
 select {
   width: 100%;
   padding: 5px 8px;

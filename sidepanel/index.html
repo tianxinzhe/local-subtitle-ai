@@ -122,6 +122,33 @@
           <select id="targetLang"></select>
         </div>
       </div>
+
+      <div class="prompt-section">
+        <div class="prompt-toggle" id="promptToggle">
+          <span data-i18n="prompt_section_title">Transcription Context (Whisper hint)</span>
+          <span class="prompt-arrow">▸</span>
+        </div>
+        <div class="prompt-body hidden" id="promptBody">
+          <div class="prompt-presets">
+            <label data-i18n="prompt_preset_label">Preset:</label>
+            <select id="promptPreset">
+              <option value="general" data-i18n="prompt_preset_general">General</option>
+              <option value="tech" data-i18n="prompt_preset_tech">Tech / Programming</option>
+              <option value="medical" data-i18n="prompt_preset_medical">Medical / Healthcare</option>
+              <option value="legal" data-i18n="prompt_preset_legal">Legal / Court</option>
+              <option value="finance" data-i18n="prompt_preset_finance">Finance / Business</option>
+              <option value="education" data-i18n="prompt_preset_education">Education / Lecture</option>
+              <option value="interview" data-i18n="prompt_preset_interview">Interview / Podcast</option>
+              <option value="gaming" data-i18n="prompt_preset_gaming">Gaming / Entertainment</option>
+              <option value="custom" data-i18n="prompt_preset_custom">Custom</option>
+            </select>
+          </div>
+          <textarea id="promptCustom" data-i18n-placeholder="prompt_placeholder" placeholder="e.g. Speaker: 张三, 李四. Topics: 量子计算, Transformer, LLM."></textarea>
+          <div class="prompt-hint" data-i18n="prompt_hint">
+            This text is fed to Whisper as initial context to bias recognition toward domain terminology, proper nouns, and speaking style.
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="modeSection">
