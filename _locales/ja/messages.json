@@ -96,5 +96,11 @@
   "model_small_desc": { "message": "良好な精度、適度な速度" },
   "model_medium_desc": { "message": "高品質、低速" },
   "model_turbo_desc": { "message": "高速+高品質（推奨）" },
-  "model_large_desc": { "message": "最高精度、最遅" }
+  "model_large_desc": { "message": "最高精度、最遅" },
+  "tab_setup": { "message": "セットアップ" },
+  "tab_subtitles": { "message": "字幕" },
+  "label_engine": { "message": "エンジン" },
+  "engine_auto": { "message": "自動" },
+  "engine_gemini": { "message": "Gemini Nano" },
+  "engine_m2m100": { "message": "M2M100-418M" }
 }

@@ -14,6 +14,7 @@ const DEFAULTS = {
   fullSpeedMode: true,
   extensionPayToken: null,
   nllbModelDownloaded: false,
+  translationEngine: 'auto',
 };
 
 let cachedConfig = null;

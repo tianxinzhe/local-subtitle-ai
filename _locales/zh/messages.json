@@ -128,5 +128,11 @@
   "model_medium_desc": { "message": "高质量，较慢" },
   "model_turbo_desc": { "message": "快速+高质量（推荐）" },
   "model_large_desc": { "message": "最佳精度，最慢" },
-  "label_engine_info": { "message": "翻译引擎" }
+  "label_engine_info": { "message": "翻译引擎" },
+  "tab_setup": { "message": "设置" },
+  "tab_subtitles": { "message": "字幕" },
+  "label_engine": { "message": "翻译引擎" },
+  "engine_auto": { "message": "自动（推荐）" },
+  "engine_gemini": { "message": "Gemini Nano" },
+  "engine_m2m100": { "message": "M2M100-418M" }
 }

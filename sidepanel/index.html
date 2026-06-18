@@ -25,286 +25,282 @@
       </select>
     </header>
 
-    <section id="controlSection">
-      <div id="modelList">
-        <div class="model-item" id="modelWhisper">
-          <span class="model-icon">🎤</span>
-          <span class="model-name">Whisper (ASR)</span>
-          <span class="model-status model-idle" id="whisperStatus">-</span>
-        </div>
-        <div class="model-item" id="modelTranslator">
-          <span class="model-icon">🌐</span>
-          <span class="model-name">Translator</span>
-          <span class="model-status model-idle" id="translatorStatus">-</span>
-        </div>
-      </div>
+    <div id="tabBar">
+      <button class="tab-btn active" data-tab="setup" data-i18n="tab_setup">Setup</button>
+      <button class="tab-btn" data-tab="subtitles" data-i18n="tab_subtitles">Subtitles</button>
+    </div>
 
-      <div id="engineInfo" class="engine-info hidden">
-        <div class="engine-info-header" id="engineInfoToggle">
-          <span class="engine-info-icon">ℹ</span>
-          <span data-i18n="label_engine_info">Translation Engines</span>
-          <span class="engine-info-arrow">▾</span>
-        </div>
-        <div id="engineInfoBody" class="engine-info-body hidden">
-          <div id="engineInfoList"></div>
-        </div>
-      </div>
-
-      <button id="activateBtn" class="primary-btn">
-        <span class="btn-ring"></span>
-        <span class="btn-label" data-i18n="btn_activate_ai">Activate All Models</span>
-      </button>
-
-      <div id="progressContainer" class="hidden">
-        <div id="progressBar">
-          <div id="progressFill"></div>
-        </div>
-        <span id="progressLabel">0%</span>
-      </div>
-
-      <div id="modelPicker" class="modal-overlay hidden">
-        <div class="modal-content">
-          <h3 data-i18n="model_picker_title">Select Whisper Model</h3>
-          <p class="modal-desc" data-i18n="model_picker_desc">Choose model size before downloading. Larger = more accurate but slower.</p>
-          <div class="model-options" id="modelOptions">
-            <label class="model-option" data-weight="75">
-              <input type="radio" name="pickerModel" value="tiny" checked>
-              <span class="option-name">Whisper Tiny</span>
-              <span class="option-size">75MB</span>
-              <span class="option-desc" data-i18n="model_tiny_desc">Fastest, lowest accuracy</span>
-            </label>
-            <label class="model-option" data-weight="140">
-              <input type="radio" name="pickerModel" value="base">
-              <span class="option-name">Whisper Base</span>
-              <span class="option-size">140MB</span>
-              <span class="option-desc" data-i18n="model_base_desc">Good balance for most use</span>
-            </label>
-            <label class="model-option" data-weight="460">
-              <input type="radio" name="pickerModel" value="small">
-              <span class="option-name">Whisper Small</span>
-              <span class="option-size">460MB</span>
-              <span class="option-desc" data-i18n="model_small_desc">Better accuracy, moderate speed</span>
-            </label>
-            <label class="model-option" data-weight="1500">
-              <input type="radio" name="pickerModel" value="medium">
-              <span class="option-name">Whisper Medium</span>
-              <span class="option-size">1.5GB</span>
-              <span class="option-desc" data-i18n="model_medium_desc">High quality, slower</span>
-            </label>
-            <label class="model-option" data-weight="1600">
-              <input type="radio" name="pickerModel" value="large-v3-turbo">
-              <span class="option-name">Whisper Turbo</span>
-              <span class="option-size">1.6GB</span>
-              <span class="option-desc" data-i18n="model_turbo_desc">Fast + high quality (recommended)</span>
-            </label>
-            <label class="model-option" data-weight="2900">
-              <input type="radio" name="pickerModel" value="large-v3">
-              <span class="option-name">Whisper Large v3</span>
-              <span class="option-size">2.9GB</span>
-              <span class="option-desc" data-i18n="model_large_desc">Best accuracy, slowest</span>
-            </label>
+    <!-- ═══ Setup Tab ═══ -->
+    <div id="tabSetup" class="tab-content active">
+      <section id="controlSection">
+        <div id="modelList">
+          <div class="model-item" id="modelWhisper">
+            <span class="model-icon">🎤</span>
+            <span class="model-name">Whisper (ASR)</span>
+            <span class="model-status model-idle" id="whisperStatus">-</span>
           </div>
-          <button id="pickerConfirmBtn" class="primary-btn">
-            <span class="btn-label" data-i18n="model_picker_confirm">Download & Activate</span>
-          </button>
+          <div class="model-item" id="modelTranslator">
+            <span class="model-icon">🌐</span>
+            <span class="model-name">Translator</span>
+            <span class="model-status model-idle" id="translatorStatus">-</span>
+          </div>
         </div>
-      </div>
 
-      <div class="lang-row">
-        <div class="lang-group">
-          <label for="sourceLang" data-i18n="label_source_lang">Source</label>
-          <select id="sourceLang">
-            <option value="auto" data-i18n="option_auto_detect">Auto</option>
+        <button id="activateBtn" class="primary-btn">
+          <span class="btn-ring"></span>
+          <span class="btn-label" data-i18n="btn_activate_ai">Activate All Models</span>
+        </button>
+
+        <div id="progressContainer" class="hidden">
+          <div id="progressBar">
+            <div id="progressFill"></div>
+          </div>
+          <span id="progressLabel">0%</span>
+        </div>
+
+        <div id="engineInfo" class="engine-info hidden">
+          <div class="engine-info-header" id="engineInfoToggle">
+            <span class="engine-info-icon">ℹ</span>
+            <span data-i18n="label_engine_info">Translation Engines</span>
+            <span class="engine-info-arrow">▾</span>
+          </div>
+          <div id="engineInfoBody" class="engine-info-body hidden">
+            <div id="engineInfoList"></div>
+          </div>
+        </div>
+
+        <div class="lang-row">
+          <div class="lang-group">
+            <label for="sourceLang" data-i18n="label_source_lang">Source</label>
+            <select id="sourceLang">
+              <option value="auto" data-i18n="option_auto_detect">Auto</option>
+            </select>
+          </div>
+          <div class="lang-group">
+            <label for="targetLang" data-i18n="label_target_lang">Target</label>
+            <select id="targetLang"></select>
+          </div>
+        </div>
+
+        <div id="modelPicker" class="modal-overlay hidden">
+          <div class="modal-content">
+            <h3 data-i18n="model_picker_title">Select Whisper Model</h3>
+            <p class="modal-desc" data-i18n="model_picker_desc">Choose model size before downloading. Larger = more accurate but slower.</p>
+            <div class="model-options" id="modelOptions">
+              <label class="model-option" data-weight="75">
+                <input type="radio" name="pickerModel" value="tiny" checked>
+                <span class="option-name">Whisper Tiny</span>
+                <span class="option-size">75MB</span>
+                <span class="option-desc" data-i18n="model_tiny_desc">Fastest, lowest accuracy</span>
+              </label>
+              <label class="model-option" data-weight="140">
+                <input type="radio" name="pickerModel" value="base">
+                <span class="option-name">Whisper Base</span>
+                <span class="option-size">140MB</span>
+                <span class="option-desc" data-i18n="model_base_desc">Good balance for most use</span>
+              </label>
+              <label class="model-option" data-weight="460">
+                <input type="radio" name="pickerModel" value="small">
+                <span class="option-name">Whisper Small</span>
+                <span class="option-size">460MB</span>
+                <span class="option-desc" data-i18n="model_small_desc">Better accuracy, moderate speed</span>
+              </label>
+              <label class="model-option" data-weight="1500">
+                <input type="radio" name="pickerModel" value="medium">
+                <span class="option-name">Whisper Medium</span>
+                <span class="option-size">1.5GB</span>
+                <span class="option-desc" data-i18n="model_medium_desc">High quality, slower</span>
+              </label>
+              <label class="model-option" data-weight="1600">
+                <input type="radio" name="pickerModel" value="large-v3-turbo">
+                <span class="option-name">Whisper Turbo</span>
+                <span class="option-size">1.6GB</span>
+                <span class="option-desc" data-i18n="model_turbo_desc">Fast + high quality (recommended)</span>
+              </label>
+              <label class="model-option" data-weight="2900">
+                <input type="radio" name="pickerModel" value="large-v3">
+                <span class="option-name">Whisper Large v3</span>
+                <span class="option-size">2.9GB</span>
+                <span class="option-desc" data-i18n="model_large_desc">Best accuracy, slowest</span>
+              </label>
+            </div>
+            <button id="pickerConfirmBtn" class="primary-btn">
+              <span class="btn-label" data-i18n="model_picker_confirm">Download & Activate</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="prompt-section">
+          <div class="prompt-toggle" id="promptToggle">
+            <span data-i18n="prompt_section_title">Transcription Context (Whisper hint)</span>
+            <span class="prompt-arrow">▸</span>
+          </div>
+          <div class="prompt-body hidden" id="promptBody">
+            <div class="prompt-presets">
+              <label data-i18n="prompt_preset_label">Preset:</label>
+              <select id="promptPreset">
+                <option value="general" data-i18n="prompt_preset_general">General</option>
+                <option value="tech" data-i18n="prompt_preset_tech">Tech / Programming</option>
+                <option value="medical" data-i18n="prompt_preset_medical">Medical / Healthcare</option>
+                <option value="legal" data-i18n="prompt_preset_legal">Legal / Court</option>
+                <option value="finance" data-i18n="prompt_preset_finance">Finance / Business</option>
+                <option value="education" data-i18n="prompt_preset_education">Education / Lecture</option>
+                <option value="interview" data-i18n="prompt_preset_interview">Interview / Podcast</option>
+                <option value="gaming" data-i18n="prompt_preset_gaming">Gaming / Entertainment</option>
+                <option value="custom" data-i18n="prompt_preset_custom">Custom</option>
+              </select>
+            </div>
+            <textarea id="promptCustom" data-i18n-placeholder="prompt_placeholder" placeholder="e.g. Speaker: 张三, 李四. Topics: 量子计算, Transformer, LLM."></textarea>
+            <div class="prompt-hint" data-i18n="prompt_hint">
+              This text is fed to Whisper as initial context to bias recognition toward domain terminology, proper nouns, and speaking style.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="modeSection">
+        <div id="modeOnline" class="mode-card hidden" data-mode="online">
+          <div class="mode-card-header">
+            <span class="mode-icon">🖥</span>
+            <span class="mode-label" data-i18n="mode_online">Online Playback</span>
+          </div>
+          <p class="mode-desc" data-i18n="mode_online_desc">Click the AI icon (top-right toolbar) on your video page, then capture</p>
+          <div class="mode-actions">
+            <button id="captureBtn" class="mode-action-btn capture-btn" disabled>
+              <span class="btn-icon">🎤</span>
+              <span class="btn-text" data-i18n="btn_capture_audio">Start Capture</span>
+            </button>
+            <button id="fullSpeedToggle" class="mode-icon-btn" data-i18n-title="tooltip_full_speed" title="Fast mode">
+              <span>⚡</span>
+            </button>
+          </div>
+          <div id="captureInfo" class="mode-info hidden">
+            <span class="mode-info-dot recording"></span>
+            <span data-i18n="status_capturing">Capturing tab audio...</span>
+          </div>
+          <div id="captureHint" class="mode-hint">
+            <span data-i18n="hint_capture_flow">1. Go to video page  2. Click AI icon in toolbar  3. Click Start Capture</span>
+          </div>
+        </div>
+
+        <div id="modeLocal" class="mode-card" data-mode="local">
+          <div class="mode-card-header">
+            <span class="mode-icon">📁</span>
+            <span class="mode-label" data-i18n="mode_local">Local File</span>
+          </div>
+          <p class="mode-desc" data-i18n="mode_local_desc">Drop video, audio, or subtitle (.srt) file</p>
+          <div id="dropZone" class="drop-zone">
+            <span id="dropText" data-i18n="hint_drop_file">Drop file here or click to browse</span>
+             <input type="file" id="fileInput" accept="video/*,.mkv,.avi,.mov,.wmv,.flv,.webm,.rm,.rmvb,audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac,.wma,.srt,.ass,.vtt" hidden>
+          </div>
+          <div id="fileInfo" class="mode-info hidden">
+            <span class="mode-info-dot loaded"></span>
+            <span id="fileTypeBadge" class="file-type-badge">VIDEO</span>
+            <span id="fileNameDisplay"></span>
+          </div>
+
+          <div id="stepActions" class="step-actions hidden">
+            <button id="stepAudioBtn" class="step-btn step-disabled" disabled>
+              <span class="step-icon">⏺</span>
+              <span class="step-label" data-i18n="btn_extract_audio">Audio</span>
+              <span class="step-status" id="stepAudioStatus">-</span>
+            </button>
+            <button id="stepTranscribeBtn" class="step-btn step-disabled" disabled>
+              <span class="step-icon">📝</span>
+              <span class="step-label" data-i18n="btn_transcribe">Transcribe</span>
+              <span class="step-status" id="stepTranscribeStatus">-</span>
+            </button>
+            <button id="stepTranslateBtn" class="step-btn step-disabled" disabled>
+              <span class="step-icon">🌐</span>
+              <span class="step-label" data-i18n="btn_translate">Translate</span>
+              <span class="step-status" id="stepTranslateStatus">-</span>
+            </button>
+          </div>
+
+          <div id="extractProgress" class="extract-progress hidden">
+            <div class="extract-bar"><div id="extractFill"></div></div>
+            <span id="extractStatus">Processing...</span>
+          </div>
+
+          <div id="extractDownloads" class="extract-downloads hidden">
+            <button id="downloadAudioBtn" class="download-btn audio-dl">
+              <span class="dl-icon">🎵</span>
+              <span data-i18n="btn_download_audio">Download Audio (WAV)</span>
+            </button>
+            <button id="downloadSrtBtn" class="download-btn srt-dl">
+              <span class="dl-icon">📄</span>
+              <span data-i18n="btn_download_srt">Download Subtitles (SRT)</span>
+            </button>
+            <button id="downloadTranslatedBtn" class="download-btn srt-dl">
+              <span class="dl-icon">🌐</span>
+              <span data-i18n="btn_download_translated">Download Translated (SRT)</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═══ Subtitles Tab ═══ -->
+    <div id="tabSubtitles" class="tab-content">
+      <div id="settingsInline" class="settings-inline">
+        <div class="setting-row">
+          <label for="settingEngine" data-i18n="label_engine">Engine</label>
+          <select id="settingEngine">
+            <option value="auto" data-i18n="engine_auto">Auto</option>
+            <option value="gemini-nano" data-i18n="engine_gemini">Gemini Nano</option>
+            <option value="m2m100" data-i18n="engine_m2m100">M2M100-418M</option>
           </select>
         </div>
-        <div class="lang-group">
-          <label for="targetLang" data-i18n="label_target_lang">Target</label>
-          <select id="targetLang"></select>
+        <div class="setting-row">
+          <label for="settingUiLang" data-i18n="label_ui_lang">Interface Language</label>
+          <select id="settingUiLang">
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="es">Español</option>
+            <option value="ru">Русский</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label for="settingAsrModel" data-i18n="label_asr_model">ASR Model</label>
+          <select id="settingAsrModel">
+            <option value="tiny" data-i18n="option_tiny_model">Whisper Tiny (75MB)</option>
+            <option value="base" data-i18n="option_base_model">Whisper Base (140MB)</option>
+            <option value="small" data-i18n="option_small_model">Whisper Small (460MB)</option>
+            <option value="medium" data-i18n="option_medium_model">Whisper Medium (1.5GB)</option>
+            <option value="large-v3" data-i18n="option_large_v3_model">Whisper Large v3 (2.9GB)</option>
+            <option value="large-v3-turbo" data-i18n="option_large_v3_turbo_model">Whisper Turbo (1.6GB)</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label for="settingFontSize" data-i18n="setting_subtitle_font_size">Font Size</label>
+          <input type="number" id="settingFontSize" min="12" max="48" value="18">
+        </div>
+        <div class="setting-row">
+          <label for="settingFontColor" data-i18n="setting_subtitle_color">Font Color</label>
+          <input type="color" id="settingFontColor" value="#FFD700">
+        </div>
+        <div class="setting-row">
+          <label for="settingBgOpacity" data-i18n="setting_subtitle_bg_opacity">Background Opacity</label>
+          <input type="range" id="settingBgOpacity" min="0" max="1" step="0.1" value="0.6">
         </div>
       </div>
 
-      <div class="prompt-section">
-        <div class="prompt-toggle" id="promptToggle">
-          <span data-i18n="prompt_section_title">Transcription Context (Whisper hint)</span>
-          <span class="prompt-arrow">▸</span>
-        </div>
-        <div class="prompt-body hidden" id="promptBody">
-          <div class="prompt-presets">
-            <label data-i18n="prompt_preset_label">Preset:</label>
-            <select id="promptPreset">
-              <option value="general" data-i18n="prompt_preset_general">General</option>
-              <option value="tech" data-i18n="prompt_preset_tech">Tech / Programming</option>
-              <option value="medical" data-i18n="prompt_preset_medical">Medical / Healthcare</option>
-              <option value="legal" data-i18n="prompt_preset_legal">Legal / Court</option>
-              <option value="finance" data-i18n="prompt_preset_finance">Finance / Business</option>
-              <option value="education" data-i18n="prompt_preset_education">Education / Lecture</option>
-              <option value="interview" data-i18n="prompt_preset_interview">Interview / Podcast</option>
-              <option value="gaming" data-i18n="prompt_preset_gaming">Gaming / Entertainment</option>
-              <option value="custom" data-i18n="prompt_preset_custom">Custom</option>
-            </select>
-          </div>
-          <textarea id="promptCustom" data-i18n-placeholder="prompt_placeholder" placeholder="e.g. Speaker: 张三, 李四. Topics: 量子计算, Transformer, LLM."></textarea>
-          <div class="prompt-hint" data-i18n="prompt_hint">
-            This text is fed to Whisper as initial context to bias recognition toward domain terminology, proper nouns, and speaking style.
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="modeSection">
-      <div id="modeOnline" class="mode-card hidden" data-mode="online">
-        <div class="mode-card-header">
-          <span class="mode-icon">🖥</span>
-          <span class="mode-label" data-i18n="mode_online">Online Playback</span>
-        </div>
-        <p class="mode-desc" data-i18n="mode_online_desc">Click the AI icon (top-right toolbar) on your video page, then capture</p>
-        <div class="mode-actions">
-          <button id="captureBtn" class="mode-action-btn capture-btn" disabled>
-            <span class="btn-icon">🎤</span>
-            <span class="btn-text" data-i18n="btn_capture_audio">Start Capture</span>
-          </button>
-          <button id="fullSpeedToggle" class="mode-icon-btn" data-i18n-title="tooltip_full_speed" title="Fast mode">
-            <span>⚡</span>
+      <div id="subtitleSection">
+        <div class="section-header">
+          <h3 data-i18n="label_subtitles">Subtitles</h3>
+          <span id="subtitleCount" class="count-badge">0</span>
+          <button id="exportBtn" class="export-btn" disabled>
+            <span class="icon">📥</span>
+            <span data-i18n="btn_export_srt">Export SRT</span>
           </button>
         </div>
-        <div id="captureInfo" class="mode-info hidden">
-          <span class="mode-info-dot recording"></span>
-          <span data-i18n="status_capturing">Capturing tab audio...</span>
+        <div id="subtitleList">
+          <div id="emptyState" class="empty-state" data-i18n="label_no_subtitles">No subtitles yet</div>
         </div>
-        <div id="captureHint" class="mode-hint">
-          <span data-i18n="hint_capture_flow">1. Go to video page  2. Click AI icon in toolbar  3. Click Start Capture</span>
-        </div>
-      </div>
-
-      <div id="modeLocal" class="mode-card" data-mode="local">
-        <div class="mode-card-header">
-          <span class="mode-icon">📁</span>
-          <span class="mode-label" data-i18n="mode_local">Local File</span>
-        </div>
-        <p class="mode-desc" data-i18n="mode_local_desc">Drop video, audio, or subtitle (.srt) file</p>
-        <div id="dropZone" class="drop-zone">
-          <span id="dropText" data-i18n="hint_drop_file">Drop file here or click to browse</span>
-           <input type="file" id="fileInput" accept="video/*,.mkv,.avi,.mov,.wmv,.flv,.webm,.rm,.rmvb,audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac,.wma,.srt,.ass,.vtt" hidden>
-        </div>
-        <div id="fileInfo" class="mode-info hidden">
-          <span class="mode-info-dot loaded"></span>
-          <span id="fileTypeBadge" class="file-type-badge">VIDEO</span>
-          <span id="fileNameDisplay"></span>
-        </div>
-
-        <div id="stepActions" class="step-actions hidden">
-          <button id="stepAudioBtn" class="step-btn step-disabled" disabled>
-            <span class="step-icon">⏺</span>
-            <span class="step-label" data-i18n="btn_extract_audio">Audio</span>
-            <span class="step-status" id="stepAudioStatus">-</span>
-          </button>
-          <button id="stepTranscribeBtn" class="step-btn step-disabled" disabled>
-            <span class="step-icon">📝</span>
-            <span class="step-label" data-i18n="btn_transcribe">Transcribe</span>
-            <span class="step-status" id="stepTranscribeStatus">-</span>
-          </button>
-          <button id="stepTranslateBtn" class="step-btn step-disabled" disabled>
-            <span class="step-icon">🌐</span>
-            <span class="step-label" data-i18n="btn_translate">Translate</span>
-            <span class="step-status" id="stepTranslateStatus">-</span>
-          </button>
-        </div>
-
-        <div id="extractProgress" class="extract-progress hidden">
-          <div class="extract-bar"><div id="extractFill"></div></div>
-          <span id="extractStatus">Processing...</span>
-        </div>
-
-        <div id="extractDownloads" class="extract-downloads hidden">
-          <button id="downloadAudioBtn" class="download-btn audio-dl">
-            <span class="dl-icon">🎵</span>
-            <span data-i18n="btn_download_audio">Download Audio (WAV)</span>
-          </button>
-          <button id="downloadSrtBtn" class="download-btn srt-dl">
-            <span class="dl-icon">📄</span>
-            <span data-i18n="btn_download_srt">Download Subtitles (SRT)</span>
-          </button>
-          <button id="downloadTranslatedBtn" class="download-btn srt-dl">
-            <span class="dl-icon">🌐</span>
-            <span data-i18n="btn_download_translated">Download Translated (SRT)</span>
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <section id="subtitleSection">
-      <div class="section-header">
-        <h3 data-i18n="label_subtitles">Subtitles</h3>
-        <span id="subtitleCount" class="count-badge">0</span>
-      </div>
-      <div id="subtitleList">
-        <div id="emptyState" class="empty-state" data-i18n="label_no_subtitles">No subtitles yet</div>
-      </div>
-    </section>
-
-    <footer id="footer">
-      <button id="exportBtn" class="export-btn" disabled>
-        <span class="icon">📥</span>
-        <span data-i18n="btn_export_srt">Export SRT</span>
-      </button>
-      <button id="settingsBtn" class="icon-btn">
-        <span class="icon">⚙️</span>
-      </button>
-    </footer>
-  </div>
-
-  <div id="settingsPanel" class="settings-overlay hidden">
-    <div class="settings-modal">
-      <div class="settings-header">
-        <h3 data-i18n="label_settings">Settings</h3>
-        <button id="closeSettings" class="icon-btn">&times;</button>
-      </div>
-      <div class="settings-body">
-        <fieldset>
-          <legend data-i18n="setting_section_general">General</legend>
-          <div class="setting-row">
-            <label for="settingUiLang" data-i18n="label_ui_lang">Interface Language</label>
-            <select id="settingUiLang">
-              <option value="en">English</option>
-              <option value="zh">中文</option>
-              <option value="ja">日本語</option>
-              <option value="ko">한국어</option>
-              <option value="fr">Français</option>
-              <option value="de">Deutsch</option>
-              <option value="es">Español</option>
-              <option value="ru">Русский</option>
-            </select>
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend data-i18n="setting_section_asr">Speech Recognition</legend>
-          <div class="setting-row">
-            <label for="settingAsrModel" data-i18n="label_asr_model">ASR Model</label>
-            <select id="settingAsrModel">
-              <option value="tiny" data-i18n="option_tiny_model">Whisper Tiny (75MB)</option>
-              <option value="base" data-i18n="option_base_model">Whisper Base (140MB)</option>
-              <option value="small" data-i18n="option_small_model">Whisper Small (460MB)</option>
-              <option value="medium" data-i18n="option_medium_model">Whisper Medium (1.5GB)</option>
-              <option value="large-v3" data-i18n="option_large_v3_model">Whisper Large v3 (2.9GB)</option>
-              <option value="large-v3-turbo" data-i18n="option_large_v3_turbo_model">Whisper Turbo (1.6GB)</option>
-            </select>
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend data-i18n="setting_section_subtitle">Subtitle Display</legend>
-          <div class="setting-row">
-            <label for="settingFontSize" data-i18n="setting_subtitle_font_size">Font Size</label>
-            <input type="number" id="settingFontSize" min="12" max="48" value="18">
-          </div>
-          <div class="setting-row">
-            <label for="settingFontColor" data-i18n="setting_subtitle_color">Font Color</label>
-            <input type="color" id="settingFontColor" value="#FFD700">
-          </div>
-          <div class="setting-row">
-            <label for="settingBgOpacity" data-i18n="setting_subtitle_bg_opacity">Background Opacity</label>
-            <input type="range" id="settingBgOpacity" min="0" max="1" step="0.1" value="0.6">
-          </div>
-        </fieldset>
       </div>
     </div>
   </div>

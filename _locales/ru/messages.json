@@ -96,5 +96,11 @@
   "model_small_desc": { "message": "Лучше точность, средняя скорость" },
   "model_medium_desc": { "message": "Высокое качество, медленнее" },
   "model_turbo_desc": { "message": "Быстро+качественно (рекомендуется)" },
-  "model_large_desc": { "message": "Лучшая точность, самый медленный" }
+  "model_large_desc": { "message": "Лучшая точность, самый медленный" },
+  "tab_setup": { "message": "Настройка" },
+  "tab_subtitles": { "message": "Субтитры" },
+  "label_engine": { "message": "Движок" },
+  "engine_auto": { "message": "Авто" },
+  "engine_gemini": { "message": "Gemini Nano" },
+  "engine_m2m100": { "message": "M2M100-418M" }
 }

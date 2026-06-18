@@ -96,5 +96,11 @@
   "model_small_desc": { "message": "Meilleure précision, vitesse modérée" },
   "model_medium_desc": { "message": "Haute qualité, plus lent" },
   "model_turbo_desc": { "message": "Rapide + haute qualité (recommandé)" },
-  "model_large_desc": { "message": "Meilleure précision, le plus lent" }
+  "model_large_desc": { "message": "Meilleure précision, le plus lent" },
+  "tab_setup": { "message": "Configuration" },
+  "tab_subtitles": { "message": "Sous-titres" },
+  "label_engine": { "message": "Moteur" },
+  "engine_auto": { "message": "Auto" },
+  "engine_gemini": { "message": "Gemini Nano" },
+  "engine_m2m100": { "message": "M2M100-418M" }
 }

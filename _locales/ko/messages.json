@@ -96,5 +96,11 @@
   "model_small_desc": { "message": "더 나은 정확도, 적당한 속도" },
   "model_medium_desc": { "message": "고품질, 느림" },
   "model_turbo_desc": { "message": "빠름+고품질 (권장)" },
-  "model_large_desc": { "message": "최고 정확도, 가장 느림" }
+  "model_large_desc": { "message": "최고 정확도, 가장 느림" },
+  "tab_setup": { "message": "설정" },
+  "tab_subtitles": { "message": "자막" },
+  "label_engine": { "message": "엔진" },
+  "engine_auto": { "message": "자동" },
+  "engine_gemini": { "message": "Gemini Nano" },
+  "engine_m2m100": { "message": "M2M100-418M" }
 }

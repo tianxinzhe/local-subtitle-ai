@@ -75,6 +75,9 @@ function localizeHtml() {
   for (const el of document.querySelectorAll('[data-i18n-title]')) {
     el.title = i18n.t(el.getAttribute('data-i18n-title'));
   }
+  for (const el of document.querySelectorAll('[data-i18n-placeholder]')) {
+    el.placeholder = i18n.t(el.getAttribute('data-i18n-placeholder'));
+  }
   document.documentElement.lang = i18n.getCurrentLanguage();
 }
 
@@ -193,6 +196,7 @@ async function loadSettings() {
 
   $('settingUiLang').value = config.uiLanguage || 'en';
   $('settingAsrModel').value = config.asrModel || 'tiny';
+  $('settingEngine').value = config.translationEngine || 'auto';
   $('settingFontSize').value = config.subtitleFontSize || 18;
   $('settingFontColor').value = config.subtitleColor || '#FFD700';
   $('settingBgOpacity').value = config.subtitleBgOpacity || 0.6;
@@ -223,7 +227,8 @@ function setupEventListeners() {
     const lang = e.target.value;
     $('settingUiLang').value = lang;
     await i18n.setLanguage(lang);
-    location.reload();
+    localizeHtml();
+    await populateLanguageDropdowns();
   });
 
   $('fileInput').addEventListener('change', (e) => {
@@ -302,20 +307,27 @@ function setupEventListeners() {
 
   $('exportBtn').addEventListener('click', exportSrt);
 
-  $('settingsBtn').addEventListener('click', () => {
-    $('settingsPanel').classList.remove('hidden');
+  // Tab switching
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+      const tab = document.getElementById('tab' + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1));
+      if (tab) tab.classList.add('active');
+    });
   });
 
-  $('closeSettings').addEventListener('click', () => {
-    $('settingsPanel').classList.add('hidden');
+  $('settingEngine').addEventListener('change', async () => {
+    await saveConfig({ translationEngine: $('settingEngine').value });
   });
 
   $('settingUiLang').addEventListener('change', async () => {
     const lang = $('settingUiLang').value;
     await i18n.setLanguage(lang);
+    localizeHtml();
     await populateLanguageDropdowns();
     await loadSettings();
-    location.reload();
   });
 
   $('settingAsrModel').addEventListener('change', async () => {
@@ -332,12 +344,6 @@ function setupEventListeners() {
 
   $('settingBgOpacity').addEventListener('input', async () => {
     await saveConfig({ subtitleBgOpacity: parseFloat($('settingBgOpacity').value) });
-  });
-
-  $('settingsPanel').addEventListener('click', (e) => {
-    if (e.target === $('settingsPanel')) {
-      $('settingsPanel').classList.add('hidden');
-    }
   });
 
   $('downloadAudioBtn').addEventListener('click', downloadExtractedAudio);
@@ -442,8 +448,11 @@ async function doActivate(model) {
   progressLabel.textContent = 'Translator: 0%';
 
   let finalStage = '';
+  const configForEngine = await loadConfig();
+  const enginePref = configForEngine.translationEngine || 'auto';
   try {
     await translator.init({
+      enginePreference: enginePref,
       onProgress: (pct, stage) => {
         progressFill.style.width = pct + '%';
         // Show clean stage text without percentage (progress bar shows it visually)
@@ -785,7 +794,7 @@ async function translateSubtitles() {
   const sourceLang = config.sourceLanguage || 'auto';
   const effectiveSource = sourceLang !== 'auto'
     ? sourceLang
-    : (segments[0].detectedLanguage || targetLang === 'zh' ? 'en' : 'zh');
+    : (segments[0].detectedLanguage || (targetLang === 'zh' ? 'en' : 'zh'));
 
   const engine = translator.getEngine?.() || '?';
   const engineLabel = engine === 'gemini-nano' ? 'Gemini Nano' : 'M2M100-418M';

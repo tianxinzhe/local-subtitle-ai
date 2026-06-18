@@ -431,40 +431,53 @@ class Translator {
     this._engine = null;
     this._ready = false;
     this._lastError = '';
+    this._enginePreference = 'auto';
   }
 
   async init(options = {}) {
     const onProgress = options.onProgress || (() => {});
+    const enginePreference = options.enginePreference || 'auto';
+    this._enginePreference = enginePreference;
     this._ready = false;
 
-    onProgress(0, 'Checking translation engine...');
-    const geminiOk = await this._gemini._checkAvailable();
+    if (enginePreference === 'gemini-nano' || enginePreference === 'auto') {
+      onProgress(0, 'Checking translation engine...');
+      const geminiOk = await this._gemini._checkAvailable();
 
-    if (geminiOk) {
-      this._engine = 'gemini-nano';
-      this._ready = true;
-      console.log('[Translator] Using engine: Gemini Nano');
-      onProgress(100, 'Gemini Nano ready');
-      return;
+      if (geminiOk) {
+        this._engine = 'gemini-nano';
+        this._ready = true;
+        console.log('[Translator] Using engine: Gemini Nano');
+        onProgress(100, 'Gemini Nano ready');
+        return;
+      }
+
+      if (enginePreference === 'gemini-nano') {
+        this._ready = false;
+        this._lastError = 'Gemini Nano not available';
+        throw new Error('Gemini Nano not available');
+      }
     }
 
-    onProgress(5, 'Setting up workers...');
-    env.remoteHost = HF_MIRROR;
+    if (enginePreference === 'm2m100' || enginePreference === 'auto') {
+      onProgress(5, 'Setting up workers...');
+      env.remoteHost = HF_MIRROR;
 
-    this._workerPool = new TranslationWorkerPool();
-    try {
-      await this._workerPool.init(onProgress);
-      this._engine = 'nllb';
-      this._ready = true;
-      const workerCount = this._workerPool._workers.length;
-      console.log(`[Translator] Using engine: M2M100-418M (${workerCount} workers)`);
-      onProgress(100, `M2M100-418M ready (${workerCount} workers)`);
-      await set('nllbModelDownloaded', true);
-    } catch (err) {
-      console.error('[Translator] Worker pool init failed:', err);
-      this._ready = false;
-      this._lastError = err.message;
-      throw new Error(`Translation engine unavailable: ${err.message}`);
+      this._workerPool = new TranslationWorkerPool();
+      try {
+        await this._workerPool.init(onProgress);
+        this._engine = 'nllb';
+        this._ready = true;
+        const workerCount = this._workerPool._workers.length;
+        console.log(`[Translator] Using engine: M2M100-418M (${workerCount} workers)`);
+        onProgress(100, `M2M100-418M ready (${workerCount} workers)`);
+        await set('nllbModelDownloaded', true);
+      } catch (err) {
+        console.error('[Translator] Worker pool init failed:', err);
+        this._ready = false;
+        this._lastError = err.message;
+        throw new Error(`Translation engine unavailable: ${err.message}`);
+      }
     }
   }
 
@@ -477,13 +490,16 @@ class Translator {
       if (this._engine === 'gemini-nano') {
         const ok = await this._gemini._canTranslate(sourceLang, targetLang);
         if (ok) return this._gemini.translate(text, sourceLang, targetLang);
-        // Fall back to M2M100
-        console.warn(`[Translator] Gemini Nano doesn't support ${sourceLang}→${targetLang}, falling back to M2M100`);
-        if (!this._workerPool || !this._workerPool.isReady()) {
-          this._workerPool = new TranslationWorkerPool();
-          await this._workerPool.init(() => {});
+        if (this._enginePreference === 'auto') {
+          console.warn(`[Translator] Gemini Nano doesn't support ${sourceLang}→${targetLang}, falling back to M2M100`);
+          if (!this._workerPool || !this._workerPool.isReady()) {
+            this._workerPool = new TranslationWorkerPool();
+            await this._workerPool.init(() => {});
+          }
+          return this._workerPool.translate(text, sourceLang, targetLang);
         }
-        return this._workerPool.translate(text, sourceLang, targetLang);
+        console.warn(`[Translator] Gemini Nano doesn't support ${sourceLang}→${targetLang}`);
+        return text;
       }
       return this._workerPool.translate(text, sourceLang, targetLang);
     } catch (err) {
@@ -521,14 +537,18 @@ class Translator {
           console.log(`[Translator] Gemini done: ${nonEmpty}/${results.length} translated`);
           return results;
         }
-        // Gemini Nano doesn't support this pair — fall back to M2M100
-        console.warn(`[Translator] Gemini Nano doesn't support ${sourceLang}→${targetLang}, falling back to M2M100`);
-        if (!this._workerPool || !this._workerPool.isReady()) {
-          if (onProgress) onProgress(0, 'Loading M2M100-418M fallback...');
-          this._workerPool = new TranslationWorkerPool();
-          await this._workerPool.init(onProgress);
+        // Gemini Nano doesn't support this pair — fall back to M2M100 only in 'auto' mode
+        if (this._enginePreference === 'auto') {
+          console.warn(`[Translator] Gemini Nano doesn't support ${sourceLang}→${targetLang}, falling back to M2M100`);
+          if (!this._workerPool || !this._workerPool.isReady()) {
+            if (onProgress) onProgress(0, 'Loading M2M100-418M fallback...');
+            this._workerPool = new TranslationWorkerPool();
+            await this._workerPool.init(onProgress);
+          }
+          return this._workerPool.batchTranslate(segments, sourceLang, targetLang, onProgress);
         }
-        return this._workerPool.batchTranslate(segments, sourceLang, targetLang, onProgress);
+        console.warn(`[Translator] Gemini Nano doesn't support ${sourceLang}→${targetLang}, returning empty`);
+        return segments.map(s => ({ ...s, translation: '' }));
       }
       return this._workerPool.batchTranslate(segments, sourceLang, targetLang, onProgress);
     } catch (err) {
