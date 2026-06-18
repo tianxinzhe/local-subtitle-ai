@@ -102,5 +102,6 @@
   "label_engine": { "message": "エンジン" },
   "engine_auto": { "message": "自動" },
   "engine_gemini": { "message": "Gemini Nano" },
-  "engine_m2m100": { "message": "M2M100-418M" }
+  "engine_m2m100": { "message": "M2M100-418M" },
+  "btn_execute": { "message": "実行" }
 }

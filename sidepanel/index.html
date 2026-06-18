@@ -33,16 +33,27 @@
     <!-- ═══ Setup Tab ═══ -->
     <div id="tabSetup" class="tab-content active">
       <section id="controlSection">
-        <div id="modelList">
-          <div class="model-item" id="modelWhisper">
-            <span class="model-icon">🎤</span>
-            <span class="model-name">Whisper (ASR)</span>
-            <span class="model-status model-idle" id="whisperStatus">-</span>
+        <div id="modelSelectors">
+          <div class="sel-row">
+            <label for="asrModelSelect" data-i18n="label_asr_model">ASR Model</label>
+            <select id="asrModelSelect">
+              <option value="tiny" data-i18n="option_tiny_model">Whisper Tiny (75MB)</option>
+              <option value="base" data-i18n="option_base_model" selected>Whisper Base (140MB)</option>
+              <option value="small" data-i18n="option_small_model">Whisper Small (460MB)</option>
+              <option value="medium" data-i18n="option_medium_model">Whisper Medium (1.5GB)</option>
+              <option value="large-v3" data-i18n="option_large_v3_model">Whisper Large v3 (2.9GB)</option>
+              <option value="large-v3-turbo" data-i18n="option_large_v3_turbo_model">Whisper Turbo (1.6GB)</option>
+            </select>
+            <span class="sel-status" id="whisperStatus">-</span>
           </div>
-          <div class="model-item" id="modelTranslator">
-            <span class="model-icon">🌐</span>
-            <span class="model-name">Translator</span>
-            <span class="model-status model-idle" id="translatorStatus">-</span>
+          <div class="sel-row">
+            <label for="engineSelect" data-i18n="label_engine">Translate Engine</label>
+            <select id="engineSelect">
+              <option value="auto" data-i18n="engine_auto">Auto</option>
+              <option value="gemini-nano" data-i18n="engine_gemini">Gemini Nano</option>
+              <option value="m2m100" data-i18n="engine_m2m100">M2M100-418M</option>
+            </select>
+            <span class="sel-status" id="translatorStatus">-</span>
           </div>
         </div>
 
@@ -58,17 +69,6 @@
           <span id="progressLabel">0%</span>
         </div>
 
-        <div id="engineInfo" class="engine-info hidden">
-          <div class="engine-info-header" id="engineInfoToggle">
-            <span class="engine-info-icon">ℹ</span>
-            <span data-i18n="label_engine_info">Translation Engines</span>
-            <span class="engine-info-arrow">▾</span>
-          </div>
-          <div id="engineInfoBody" class="engine-info-body hidden">
-            <div id="engineInfoList"></div>
-          </div>
-        </div>
-
         <div class="lang-row">
           <div class="lang-group">
             <label for="sourceLang" data-i18n="label_source_lang">Source</label>
@@ -79,54 +79,6 @@
           <div class="lang-group">
             <label for="targetLang" data-i18n="label_target_lang">Target</label>
             <select id="targetLang"></select>
-          </div>
-        </div>
-
-        <div id="modelPicker" class="modal-overlay hidden">
-          <div class="modal-content">
-            <h3 data-i18n="model_picker_title">Select Whisper Model</h3>
-            <p class="modal-desc" data-i18n="model_picker_desc">Choose model size before downloading. Larger = more accurate but slower.</p>
-            <div class="model-options" id="modelOptions">
-              <label class="model-option" data-weight="75">
-                <input type="radio" name="pickerModel" value="tiny" checked>
-                <span class="option-name">Whisper Tiny</span>
-                <span class="option-size">75MB</span>
-                <span class="option-desc" data-i18n="model_tiny_desc">Fastest, lowest accuracy</span>
-              </label>
-              <label class="model-option" data-weight="140">
-                <input type="radio" name="pickerModel" value="base">
-                <span class="option-name">Whisper Base</span>
-                <span class="option-size">140MB</span>
-                <span class="option-desc" data-i18n="model_base_desc">Good balance for most use</span>
-              </label>
-              <label class="model-option" data-weight="460">
-                <input type="radio" name="pickerModel" value="small">
-                <span class="option-name">Whisper Small</span>
-                <span class="option-size">460MB</span>
-                <span class="option-desc" data-i18n="model_small_desc">Better accuracy, moderate speed</span>
-              </label>
-              <label class="model-option" data-weight="1500">
-                <input type="radio" name="pickerModel" value="medium">
-                <span class="option-name">Whisper Medium</span>
-                <span class="option-size">1.5GB</span>
-                <span class="option-desc" data-i18n="model_medium_desc">High quality, slower</span>
-              </label>
-              <label class="model-option" data-weight="1600">
-                <input type="radio" name="pickerModel" value="large-v3-turbo">
-                <span class="option-name">Whisper Turbo</span>
-                <span class="option-size">1.6GB</span>
-                <span class="option-desc" data-i18n="model_turbo_desc">Fast + high quality (recommended)</span>
-              </label>
-              <label class="model-option" data-weight="2900">
-                <input type="radio" name="pickerModel" value="large-v3">
-                <span class="option-name">Whisper Large v3</span>
-                <span class="option-size">2.9GB</span>
-                <span class="option-desc" data-i18n="model_large_desc">Best accuracy, slowest</span>
-              </label>
-            </div>
-            <button id="pickerConfirmBtn" class="primary-btn">
-              <span class="btn-label" data-i18n="model_picker_confirm">Download & Activate</span>
-            </button>
           </div>
         </div>
 
@@ -188,7 +140,6 @@
             <span class="mode-icon">📁</span>
             <span class="mode-label" data-i18n="mode_local">Local File</span>
           </div>
-          <p class="mode-desc" data-i18n="mode_local_desc">Drop video, audio, or subtitle (.srt) file</p>
           <div id="dropZone" class="drop-zone">
             <span id="dropText" data-i18n="hint_drop_file">Drop file here or click to browse</span>
              <input type="file" id="fileInput" accept="video/*,.mkv,.avi,.mov,.wmv,.flv,.webm,.rm,.rmvb,audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aac,.wma,.srt,.ass,.vtt" hidden>
@@ -199,42 +150,35 @@
             <span id="fileNameDisplay"></span>
           </div>
 
-          <div id="stepActions" class="step-actions hidden">
-            <button id="stepAudioBtn" class="step-btn step-disabled" disabled>
-              <span class="step-icon">⏺</span>
-              <span class="step-label" data-i18n="btn_extract_audio">Audio</span>
-              <span class="step-status" id="stepAudioStatus">-</span>
-            </button>
-            <button id="stepTranscribeBtn" class="step-btn step-disabled" disabled>
-              <span class="step-icon">📝</span>
-              <span class="step-label" data-i18n="btn_transcribe">Transcribe</span>
-              <span class="step-status" id="stepTranscribeStatus">-</span>
-            </button>
-            <button id="stepTranslateBtn" class="step-btn step-disabled" disabled>
-              <span class="step-icon">🌐</span>
-              <span class="step-label" data-i18n="btn_translate">Translate</span>
-              <span class="step-status" id="stepTranslateStatus">-</span>
-            </button>
-          </div>
+          <div id="pipelineArea" class="hidden">
+            <div class="pipeline-bar">
+              <label class="pl-chk"><input type="checkbox" id="chkExtract" checked> <span data-i18n="btn_extract_audio">Extract Audio</span></label>
+              <label class="pl-chk"><input type="checkbox" id="chkTranscribe" checked> <span data-i18n="btn_transcribe">Transcribe</span></label>
+              <label class="pl-chk"><input type="checkbox" id="chkTranslate" checked> <span data-i18n="btn_translate">Translate</span></label>
+              <button id="executeBtn" class="execute-btn" disabled><span>▶</span> <span data-i18n="btn_execute">Run</span></button>
+            </div>
 
-          <div id="extractProgress" class="extract-progress hidden">
-            <div class="extract-bar"><div id="extractFill"></div></div>
-            <span id="extractStatus">Processing...</span>
-          </div>
-
-          <div id="extractDownloads" class="extract-downloads hidden">
-            <button id="downloadAudioBtn" class="download-btn audio-dl">
-              <span class="dl-icon">🎵</span>
-              <span data-i18n="btn_download_audio">Download Audio (WAV)</span>
-            </button>
-            <button id="downloadSrtBtn" class="download-btn srt-dl">
-              <span class="dl-icon">📄</span>
-              <span data-i18n="btn_download_srt">Download Subtitles (SRT)</span>
-            </button>
-            <button id="downloadTranslatedBtn" class="download-btn srt-dl">
-              <span class="dl-icon">🌐</span>
-              <span data-i18n="btn_download_translated">Download Translated (SRT)</span>
-            </button>
+            <div id="stepList" class="step-list hidden">
+              <div class="pp-wrap" id="ppWrap"><div class="pp-bar"><div id="ppFill"></div></div></div>
+              <div class="step-item" id="siExtract">
+                <span class="si-num">1</span>
+                <span class="si-name" data-i18n="btn_extract_audio">Extract Audio</span>
+                <span class="si-progress" id="progExtract"></span>
+                <button class="si-dl hidden" id="dlExtract" title="Download WAV">⬇</button>
+              </div>
+              <div class="step-item" id="siTranscribe">
+                <span class="si-num">2</span>
+                <span class="si-name" data-i18n="btn_transcribe">Transcribe</span>
+                <span class="si-progress" id="progTranscribe"></span>
+                <button class="si-dl hidden" id="dlTranscribe" title="Download SRT">⬇</button>
+              </div>
+              <div class="step-item" id="siTranslate">
+                <span class="si-num">3</span>
+                <span class="si-name" data-i18n="btn_translate">Translate</span>
+                <span class="si-progress" id="progTranslate"></span>
+                <button class="si-dl hidden" id="dlTranslate" title="Download SRT">⬇</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -243,14 +187,6 @@
     <!-- ═══ Subtitles Tab ═══ -->
     <div id="tabSubtitles" class="tab-content">
       <div id="settingsInline" class="settings-inline">
-        <div class="setting-row">
-          <label for="settingEngine" data-i18n="label_engine">Engine</label>
-          <select id="settingEngine">
-            <option value="auto" data-i18n="engine_auto">Auto</option>
-            <option value="gemini-nano" data-i18n="engine_gemini">Gemini Nano</option>
-            <option value="m2m100" data-i18n="engine_m2m100">M2M100-418M</option>
-          </select>
-        </div>
         <div class="setting-row">
           <label for="settingUiLang" data-i18n="label_ui_lang">Interface Language</label>
           <select id="settingUiLang">
@@ -262,17 +198,6 @@
             <option value="de">Deutsch</option>
             <option value="es">Español</option>
             <option value="ru">Русский</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <label for="settingAsrModel" data-i18n="label_asr_model">ASR Model</label>
-          <select id="settingAsrModel">
-            <option value="tiny" data-i18n="option_tiny_model">Whisper Tiny (75MB)</option>
-            <option value="base" data-i18n="option_base_model">Whisper Base (140MB)</option>
-            <option value="small" data-i18n="option_small_model">Whisper Small (460MB)</option>
-            <option value="medium" data-i18n="option_medium_model">Whisper Medium (1.5GB)</option>
-            <option value="large-v3" data-i18n="option_large_v3_model">Whisper Large v3 (2.9GB)</option>
-            <option value="large-v3-turbo" data-i18n="option_large_v3_turbo_model">Whisper Turbo (1.6GB)</option>
           </select>
         </div>
         <div class="setting-row">

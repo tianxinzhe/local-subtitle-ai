@@ -4,7 +4,7 @@ const DEFAULTS = {
   uiLanguage: 'en',
   sourceLanguage: 'auto',
   targetLanguage: 'zh',
-  asrModel: 'tiny',
+  asrModel: 'base',
   subtitleFontSize: 18,
   subtitleColor: '#FFD700',
   subtitleBgOpacity: 0.6,

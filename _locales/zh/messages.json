@@ -134,5 +134,6 @@
   "label_engine": { "message": "翻译引擎" },
   "engine_auto": { "message": "自动（推荐）" },
   "engine_gemini": { "message": "Gemini Nano" },
-  "engine_m2m100": { "message": "M2M100-418M" }
+  "engine_m2m100": { "message": "M2M100-418M" },
+  "btn_execute": { "message": "执行" }
 }

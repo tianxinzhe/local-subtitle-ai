@@ -134,5 +134,6 @@
   "label_engine": { "message": "Engine" },
   "engine_auto": { "message": "Auto (Recommended)" },
   "engine_gemini": { "message": "Gemini Nano" },
-  "engine_m2m100": { "message": "M2M100-418M" }
+  "engine_m2m100": { "message": "M2M100-418M" },
+  "btn_execute": { "message": "Run" }
 }

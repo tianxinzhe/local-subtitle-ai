@@ -20,6 +20,7 @@ let isExtracting = false;
 let fullSpeedMode = false;
 let captureStream = null;
 let captureAudioContext = null;
+let _currentStep = null; // 'Extract' | 'Transcribe' | 'Translate'
 
 // Whisper initial-prompt presets. Whisper uses the prompt as preceding
 // context to bias recognition toward domain terminology, proper nouns,
@@ -53,19 +54,114 @@ function nextPaint() {
 
 // Update the extraction progress bar + status label in one place.
 function setExtractProgress(pct, statusText, opts) {
-  // Map per-step progress to overall 3-step range
-  const base = opts?.base ?? 0;
-  const range = opts?.range ?? 100;
-  const overall = Math.round(base + pct * range / 100);
-  const fillEl = $('extractFill');
-  if (fillEl) {
-    fillEl.style.setProperty('width', overall + '%', 'important');
-    fillEl.style.setProperty('display', 'block', 'important');
+  const ppFill = $('ppFill');
+  if (ppFill) ppFill.style.width = Math.round(pct) + '%';
+  if (_currentStep) {
+    const progEl = $('prog' + _currentStep);
+    if (progEl && pct < 100) {
+      progEl.innerHTML = `<span class="step-spinner"></span> ${Math.round(pct)}%`;
+    }
   }
-  if (statusText !== undefined) {
-    const statusEl = $('extractStatus');
-    if (statusEl) statusEl.textContent = statusText;
+}
+
+function setStepDone(step, ok) {
+  const progEl = $('prog' + step);
+  const dlEl = $('dl' + step);
+  if (ok) {
+    progEl.textContent = '✓';
+    progEl.className = 'si-progress si-done';
+    dlEl.classList.remove('hidden');
+  } else {
+    progEl.textContent = '✗';
+    progEl.className = 'si-progress si-error';
   }
+}
+
+function updatePipelineCheckboxes(fileType) {
+  const chkExtract = $('chkExtract');
+  const chkTranscribe = $('chkTranscribe');
+  const chkTranslate = $('chkTranslate');
+  if (fileType === 'video') {
+    chkExtract.checked = true; chkExtract.disabled = false; chkExtract.parentElement.classList.remove('pl-disabled');
+    chkTranscribe.checked = true; chkTranscribe.disabled = false; chkTranscribe.parentElement.classList.remove('pl-disabled');
+    chkTranslate.checked = true; chkTranslate.disabled = false; chkTranslate.parentElement.classList.remove('pl-disabled');
+  } else if (fileType === 'audio') {
+    chkExtract.checked = true; chkExtract.disabled = true; chkExtract.parentElement.classList.add('pl-disabled');
+    chkTranscribe.checked = true; chkTranscribe.disabled = false; chkTranscribe.parentElement.classList.remove('pl-disabled');
+    chkTranslate.checked = true; chkTranslate.disabled = false; chkTranslate.parentElement.classList.remove('pl-disabled');
+  } else if (fileType === 'subtitle') {
+    chkExtract.checked = false; chkExtract.disabled = true; chkExtract.parentElement.classList.add('pl-disabled');
+    chkTranscribe.checked = false; chkTranscribe.disabled = true; chkTranscribe.parentElement.classList.add('pl-disabled');
+    chkTranslate.checked = true; chkTranslate.disabled = false; chkTranslate.parentElement.classList.remove('pl-disabled');
+  }
+}
+
+function resetPipelineSteps() {
+  $('stepList').classList.add('hidden');
+  $('ppWrap').classList.add('hidden');
+  for (const s of ['Extract', 'Transcribe', 'Translate']) {
+    const p = $('prog' + s);
+    p.textContent = '';
+    p.className = 'si-progress';
+    $('dl' + s).classList.add('hidden');
+    $('si' + s).classList.remove('hidden');
+  }
+}
+
+async function executePipeline() {
+  if (isProcessing) return;
+  isProcessing = true;
+  $('executeBtn').disabled = true;
+  $('stepList').classList.remove('hidden');
+  $('ppWrap').classList.remove('hidden');
+  $('ppFill').style.width = '0%';
+
+  for (const s of ['Extract', 'Transcribe', 'Translate']) {
+    const p = $('prog' + s);
+    p.textContent = '⏳';
+    p.className = 'si-progress';
+    $('dl' + s).classList.add('hidden');
+    $('si' + s).classList.remove('hidden');
+  }
+
+  const doExtract = $('chkExtract').checked && !$('chkExtract').disabled;
+  const doTranscribe = $('chkTranscribe').checked && !$('chkTranscribe').disabled;
+  const doTranslate = $('chkTranslate').checked && !$('chkTranslate').disabled;
+
+  try {
+    if (doExtract && currentFileType === 'video' && !audioData) {
+      _currentStep = 'Extract';
+      await extractAudio(currentFile);
+      setStepDone('Extract', true);
+    } else {
+      $('siExtract').classList.add('hidden');
+    }
+
+    if (doTranscribe && audioData) {
+      _currentStep = 'Transcribe';
+      await transcribeAudio();
+      setStepDone('Transcribe', true);
+    } else if (currentFileType === 'subtitle') {
+      setStepDone('Transcribe', true);
+    } else {
+      $('siTranscribe').classList.add('hidden');
+    }
+
+    if (doTranslate && srtExporter.getSegmentCount() > 0 && hasTranslator()) {
+      _currentStep = 'Translate';
+      await translateSubtitles();
+      setStepDone('Translate', true);
+    } else {
+      $('siTranslate').classList.add('hidden');
+    }
+  } catch (err) {
+    console.error('[Pipeline] Failed:', err);
+    if (_currentStep) setStepDone(_currentStep, false);
+  }
+
+  _currentStep = null;
+  isProcessing = false;
+  $('executeBtn').disabled = false;
 }
 
 function localizeHtml() {
@@ -89,42 +185,9 @@ async function init() {
   await loadSettings();
   setupEventListeners();
   setModeCardsEnabled(false);
-  populateEngineInfo();
 }
 
 async function populateEngineInfo() {
-  const listEl = $('engineInfoList');
-  if (!listEl) return;
-  const engines = await Translator.getEnginesStatus();
-
-  // After activation, update M2M100 detail with actual result
-  const activeDetail = translator.getEngineDetail ? translator.getEngineDetail() : null;
-  if (activeDetail) {
-    for (const e of engines) {
-      if (e.engine.includes('M2M100') && activeDetail.engine.includes('M2M100')) {
-        e.available = activeDetail.available;
-        e.detail = activeDetail.detail;
-      }
-    }
-  }
-
-  // Sort: available first
-  engines.sort((a, b) => (a.available === b.available ? 0 : a.available ? -1 : 1));
-
-  listEl.innerHTML = engines.map(e => {
-    const ok = e.available;
-    const flagLink = e.flagNeeded && e.flagUrl
-      ? `<a href="${e.flagUrl}" target="_blank" class="engine-info-flag">${e.detail} (click to open)</a>`
-      : `<div class="engine-info-detail">${e.detail}</div>`;
-    return `<div class="engine-info-item">
-      <span class="engine-info-check ${ok ? 'ok' : 'fail'}">${ok ? '✓' : '✗'}</span>
-      <div>
-        <div class="engine-info-name">${e.engine}</div>
-        ${flagLink}
-      </div>
-    </div>`;
-  }).join('');
-  $('engineInfo').classList.remove('hidden');
 }
 
 async function connectBackground() {
@@ -195,8 +258,8 @@ async function loadSettings() {
   $('targetLang').value = config.targetLanguage || 'zh';
 
   $('settingUiLang').value = config.uiLanguage || 'en';
-  $('settingAsrModel').value = config.asrModel || 'tiny';
-  $('settingEngine').value = config.translationEngine || 'auto';
+  $('asrModelSelect').value = config.asrModel || 'base';
+  $('engineSelect').value = config.translationEngine || 'auto';
   $('settingFontSize').value = config.subtitleFontSize || 18;
   $('settingFontColor').value = config.subtitleColor || '#FFD700';
   $('settingBgOpacity').value = config.subtitleBgOpacity || 0.6;
@@ -318,8 +381,12 @@ function setupEventListeners() {
     });
   });
 
-  $('settingEngine').addEventListener('change', async () => {
-    await saveConfig({ translationEngine: $('settingEngine').value });
+  $('asrModelSelect').addEventListener('change', async () => {
+    await saveConfig({ asrModel: $('asrModelSelect').value });
+  });
+
+  $('engineSelect').addEventListener('change', async () => {
+    await saveConfig({ translationEngine: $('engineSelect').value });
   });
 
   $('settingUiLang').addEventListener('change', async () => {
@@ -328,10 +395,6 @@ function setupEventListeners() {
     localizeHtml();
     await populateLanguageDropdowns();
     await loadSettings();
-  });
-
-  $('settingAsrModel').addEventListener('change', async () => {
-    await saveConfig({ asrModel: $('settingAsrModel').value });
   });
 
   $('settingFontSize').addEventListener('change', async () => {
@@ -346,60 +409,17 @@ function setupEventListeners() {
     await saveConfig({ subtitleBgOpacity: parseFloat($('settingBgOpacity').value) });
   });
 
-  $('downloadAudioBtn').addEventListener('click', downloadExtractedAudio);
-  $('downloadSrtBtn').addEventListener('click', downloadExtractedSrt);
-  $('downloadTranslatedBtn').addEventListener('click', downloadTranslatedSrt);
-
-  $('stepAudioBtn').addEventListener('click', () => {
-    if (currentFile && currentFileType === 'video' && !isExtracting) {
-      extractAudio(currentFile);
-    }
-  });
-  $('stepTranscribeBtn').addEventListener('click', () => {
-    if (audioData && !isExtracting) {
-      transcribeAudio();
-    }
-  });
-  $('stepTranslateBtn').addEventListener('click', () => {
-    if (srtExporter.getSegmentCount() > 0 && !isExtracting) {
-      translateSubtitles();
-    }
-  });
-
-  // Model picker confirm
-  $('pickerConfirmBtn').addEventListener('click', () => {
-    const selected = document.querySelector('input[name="pickerModel"]:checked');
-    if (selected) {
-      const model = selected.value;
-      $('settingAsrModel').value = model;
-      saveConfig({ asrModel: model });
-      showModelPicker(false);
-      doActivate(model);
-    }
-  });
-
-  // Engine info toggle
-  $('engineInfoToggle').addEventListener('click', () => {
-    const body = $('engineInfoBody');
-    const arrow = $('engineInfoToggle').querySelector('.engine-info-arrow');
-    body.classList.toggle('hidden');
-    arrow.classList.toggle('open');
-  });
-}
-
-function showModelPicker(show) {
-  $('modelPicker').classList.toggle('hidden', !show);
+  // Pipeline execute + download buttons
+  $('executeBtn').addEventListener('click', executePipeline);
+  $('dlExtract').addEventListener('click', downloadExtractedAudio);
+  $('dlTranscribe').addEventListener('click', downloadExtractedSrt);
+  $('dlTranslate').addEventListener('click', downloadTranslatedSrt);
 }
 
 async function toggleAi() {
   if (isAiReady) return;
-
-  // Show model picker before loading
-  const config = await loadConfig();
-  const currentModel = config.asrModel || 'tiny';
-  const radio = document.querySelector(`input[name="pickerModel"][value="${currentModel}"]`);
-  if (radio) radio.checked = true;
-  showModelPicker(true);
+  const model = $('asrModelSelect').value;
+  await doActivate(model);
 }
 
 async function doActivate(model) {
@@ -419,7 +439,7 @@ async function doActivate(model) {
 
   // Step 1: Load Whisper
   whisperStatusEl.textContent = '...';
-  whisperStatusEl.className = 'model-status model-loading';
+  whisperStatusEl.className = 'sel-status sel-loading';
   progressFill.style.width = '0%';
   progressLabel.textContent = 'Whisper: 0%';
 
@@ -434,16 +454,16 @@ async function doActivate(model) {
     });
     whisperOk = true;
     whisperStatusEl.textContent = '✓ OK';
-    whisperStatusEl.className = 'model-status model-ready';
+    whisperStatusEl.className = 'sel-status sel-ready';
   } catch (err) {
     whisperStatusEl.textContent = '✗ Failed';
-    whisperStatusEl.className = 'model-status model-error';
+    whisperStatusEl.className = 'sel-status sel-error';
     console.error('[SidePanel] Whisper load failed:', err);
   }
 
   // Step 2: Load Translator (even if whisper failed)
   translatorStatusEl.textContent = '...';
-  translatorStatusEl.className = 'model-status model-loading';
+  translatorStatusEl.className = 'sel-status sel-loading';
   progressFill.style.width = '0%';
   progressLabel.textContent = 'Translator: 0%';
 
@@ -474,11 +494,11 @@ async function doActivate(model) {
     } else {
       translatorStatusEl.textContent = '✓ OK';
     }
-    translatorStatusEl.className = 'model-status model-ready';
+    translatorStatusEl.className = 'sel-status sel-ready';
     populateEngineInfo();
   } catch (err) {
     translatorStatusEl.textContent = '✗ Failed';
-    translatorStatusEl.className = 'model-status model-error';
+    translatorStatusEl.className = 'sel-status sel-error';
     console.error('[SidePanel] Translator load failed:', err);
     populateEngineInfo();
   }
@@ -527,11 +547,11 @@ function handleFileDrop(file) {
   $('fileNameDisplay').textContent = file.name;
   $('fileTypeBadge').textContent = currentFileType.toUpperCase();
   $('fileInfo').classList.remove('hidden');
-  $('stepActions').classList.remove('hidden');
-  $('extractProgress').classList.add('hidden');
-  $('extractDownloads').classList.add('hidden');
+  $('pipelineArea').classList.remove('hidden');
+  resetPipelineSteps();
+  updatePipelineCheckboxes(currentFileType);
+  $('executeBtn').disabled = false;
   $('modeLocal').classList.add('active');
-  updateStepButtons();
   setStatus('ready', i18n.t('status_idle'));
 
   // For subtitle files, load content directly
@@ -544,84 +564,32 @@ function handleFileDrop(file) {
   }
 }
 
-function updateStepButtons() {
-  const audioBtn = $('stepAudioBtn');
-  const transcribeBtn = $('stepTranscribeBtn');
-  const translateBtn = $('stepTranslateBtn');
-
-  // Audio step: only for video files
-  if (currentFileType === 'video') {
-    audioBtn.className = audioData ? 'step-btn step-done' : 'step-btn';
-    audioBtn.disabled = false;
-  } else {
-    audioBtn.className = 'step-btn step-done';
-    audioBtn.disabled = true;
-    $('stepAudioStatus').textContent = '✓';
-  }
-
-  // Transcribe step: needs audio data + Whisper
-  if (audioData && whisper.isReady()) {
-    transcribeBtn.className = srtExporter.getSegmentCount() > 0 ? 'step-btn step-done' : 'step-btn';
-    transcribeBtn.disabled = false;
-  } else if (currentFileType === 'subtitle') {
-    transcribeBtn.className = 'step-btn step-done';
-    transcribeBtn.disabled = true;
-    $('stepTranscribeStatus').textContent = '✓';
-  } else {
-    transcribeBtn.className = 'step-btn step-disabled';
-    transcribeBtn.disabled = true;
-  }
-
-  // Translate step: needs subtitles + Translator
-  if (srtExporter.getSegmentCount() > 0 && hasTranslator()) {
-    translateBtn.className = 'step-btn';
-    translateBtn.disabled = false;
-  } else {
-    translateBtn.className = 'step-btn step-disabled';
-    translateBtn.disabled = true;
-  }
-}
-
 function hasTranslator() {
   return translator.isReady?.() || false;
 }
 
 async function decodeAudioOnly(file) {
-  $('extractProgress').classList.remove('hidden');
-  $('extractStatus').textContent = 'Decoding audio...';
   isExtracting = true;
 
   try {
     const raw = await audioProcessor.decodeAudioFile(file, {
       onLog: (msg) => console.log('[AudioProcessor]', msg),
-      onProgress: (pct, stage) => {
-        if (stage && stage !== 'progress') {
-          $('extractStatus').textContent = stage;
-        }
-      },
     });
     audioData = raw;
     console.log('[Step] Audio decoded, amplitude:', getMaxAmplitude(raw).toFixed(6));
-    $('extractProgress').classList.add('hidden');
-    updateStepButtons();
   } catch (err) {
     console.error('[Step] Decode failed:', err);
-    $('extractStatus').textContent = 'Decode failed: ' + err.message;
   }
   isExtracting = false;
 }
 
 async function loadSubtitleFile(file) {
-  $('extractProgress').classList.remove('hidden');
-  $('extractStatus').textContent = 'Loading subtitle file...';
   try {
     const text = await file.text();
     const lines = text.split('\n');
-    // Simple SRT parse: look for timestamp patterns
     let currentSeg = null;
     for (let i = 0; i < lines.length; i++) {
       const tl = lines[i].trim();
-      // Match timestamp line: 00:00:01,000 --> 00:00:04,000
       const tsMatch = tl.match(/(\d{1,2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{3})/);
       if (tsMatch) {
         currentSeg = {
@@ -649,13 +617,8 @@ async function loadSubtitleFile(file) {
     }
     $('subtitleCount').textContent = srtExporter.getSegmentCount();
     updateExportButton();
-    $('extractProgress').classList.add('hidden');
-    $('extractDownloads').classList.remove('hidden');
-    $('downloadSrtBtn').disabled = false;
-    updateStepButtons();
   } catch (err) {
     console.error('[Step] Subtitle load failed:', err);
-    $('extractStatus').textContent = 'Subtitle load failed: ' + err.message;
   }
 }
 
@@ -676,39 +639,22 @@ function getMaxAmplitude(arr) {
 async function extractAudio(file) {
   console.log('[Step1] Starting audio extraction:', file.name);
   isExtracting = true;
-  $('extractProgress').classList.remove('hidden');
-  $('stepAudioBtn').className = 'step-btn step-active';
-  $('stepAudioStatus').textContent = '...';
   setExtractProgress(0, 'Decoding audio...');
 
   try {
     const raw = await audioProcessor.decodeAudioFile(file, {
       onLog: (msg) => console.log('[AudioProcessor]', msg),
-      onProgress: (pct, stage) => {
-        if (stage && stage !== 'progress') {
-          $('extractStatus').textContent = stage;
-        }
-      },
     });
     const maxA = getMaxAmplitude(raw);
     console.log('[Step1] Decoded, amplitude:', maxA.toFixed(6), 'samples:', raw.length);
 
-    // Store clean audio for WAV export
     audioData = raw;
 
     setExtractProgress(100, 'Audio ready');
-    $('stepAudioBtn').className = 'step-btn step-done';
-    $('stepAudioStatus').textContent = '✓';
-    $('extractDownloads').classList.remove('hidden');
-    $('downloadAudioBtn').disabled = false;
     window._extractedAudioChunks = [raw];
-
-    updateStepButtons();
   } catch (err) {
     console.error('[Step1] Failed:', err);
-    $('extractStatus').textContent = 'Error: ' + err.message;
-    $('stepAudioBtn').className = 'step-btn';
-    $('stepAudioStatus').textContent = '✗';
+    throw err;
   }
   isExtracting = false;
 }
@@ -717,24 +663,13 @@ async function transcribeAudio() {
   if (!audioData) return;
   console.log('[Step2] Starting transcription');
   isExtracting = true;
-  $('extractProgress').classList.remove('hidden');
-  $('stepTranscribeBtn').className = 'step-btn step-active';
-  $('stepTranscribeStatus').textContent = '...';
 
-  // Clear previous subtitles
   srtExporter.clear();
   $('subtitleList').innerHTML = '<div id="emptyState" class="empty-state">No subtitles yet</div>';
   $('subtitleCount').textContent = '0';
-  $('extractDownloads').classList.add('hidden');
-  $('downloadSrtBtn').disabled = true;
-  $('downloadTranslatedBtn').disabled = true;
 
   const config = await loadConfig();
   const sourceLang = config.sourceLanguage || 'auto';
-
-  srtExporter.clear();
-  $('subtitleList').innerHTML = '<div id="emptyState" class="empty-state">No subtitles yet</div>';
-  $('subtitleCount').textContent = '0';
 
   try {
     const segments = await whisper.transcribeAll(audioData, {
@@ -747,8 +682,6 @@ async function transcribeAudio() {
     if (!isExtracting) return;
 
     let added = 0;
-    $('extractDownloads').classList.remove('hidden');
-    $('downloadSrtBtn').disabled = false;
 
     for (const seg of segments) {
       if (!seg.text || !seg.text.trim()) continue;
@@ -770,13 +703,9 @@ async function transcribeAudio() {
       console.log('[Step2] Cancelled');
     } else {
       console.error('[Step2] Failed:', e);
-      setExtractProgress(0, 'Error');
     }
   }
-  $('stepTranscribeBtn').className = 'step-btn step-done';
-  $('stepTranscribeStatus').textContent = '✓';
   updateExportButton();
-  updateStepButtons();
   isExtracting = false;
 }
 
@@ -785,9 +714,6 @@ async function translateSubtitles() {
   if (!segments || segments.length === 0) return;
   console.log('[Step3] Starting translation, segments:', segments.length);
   isExtracting = true;
-  $('extractProgress').classList.remove('hidden');
-  $('stepTranslateBtn').className = 'step-btn step-active';
-  $('stepTranslateStatus').textContent = '...';
 
   const config = await loadConfig();
   const targetLang = config.targetLanguage || 'zh';
@@ -815,7 +741,6 @@ async function translateSubtitles() {
     if (seg.translation) translatedCount++;
   }
 
-  // Refresh UI cards to show translations
   const list = $('subtitleList');
   list.innerHTML = '';
   for (const seg of translated) {
@@ -823,22 +748,15 @@ async function translateSubtitles() {
     addSubtitleCard(seg.start, seg.original, seg.translation, rtl);
   }
 
-  // Write translated segments back to srtExporter
   srtExporter.clear();
   srtExporter.addSegments(translated);
 
-  // Verify writeback
   const writtenSegs = srtExporter.getSegments();
   const withTr = writtenSegs.filter(s => s.translation).length;
   console.log(`[Step3] Writeback verified: ${writtenSegs.length} segs, ${withTr} with translation`);
-  console.log('[Step3] First 3 after writeback:', writtenSegs.slice(0, 3).map(s => ({ idx: s.index, tr: (s.translation || '').substring(0, 40) })));
 
   console.log('[Step3] Done, translated:', translatedCount);
   setExtractProgress(100, `Translated ${translatedCount} segments`);
-  $('stepTranslateBtn').className = 'step-btn step-done';
-  $('stepTranslateStatus').textContent = '✓';
-  $('downloadTranslatedBtn').disabled = false;
-  $('extractDownloads').classList.remove('hidden');
   updateExportButton();
   isExtracting = false;
 }
