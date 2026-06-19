@@ -66,29 +66,6 @@ class I18n {
     await this._loadMessages(lang);
     await this._loadFallback();
     await saveConfig({ uiLanguage: lang });
-    try {
-      await chrome.runtime.sendMessage({
-        type: 'UI_LANGUAGE_CHANGED',
-        language: lang
-      });
-    } catch {}
-    this._notifyAllPages(lang);
-  }
-
-  async _notifyAllPages(lang) {
-    try {
-      const tabs = await chrome.tabs.query({});
-      for (const tab of tabs) {
-        if (tab.url && (tab.url.includes('sidepanel') || tab.url.includes('player'))) {
-          try {
-            await chrome.tabs.sendMessage(tab.id, {
-              type: 'UI_LANGUAGE_CHANGED',
-              language: lang
-            });
-          } catch {}
-        }
-      }
-    } catch {}
   }
 
   getCurrentLanguage() {

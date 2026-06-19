@@ -7,19 +7,13 @@ import { sentenceMerger } from '../modules/sentence-merger.js';
 import { slidingWindow } from '../modules/sliding-window.js';
 import { srtExporter } from '../modules/srt-exporter.js';
 import { getAllLanguages, getLanguage, getLanguageDisplayName, isRtl } from '../modules/languages.js';
-import { fileStore } from '../modules/file-store.js';
 
-let backgroundPort = null;
 let currentFile = null;
 let currentFileType = null; // 'video', 'audio', 'subtitle'
 let audioData = null;        // decoded Float32Array
 let isProcessing = false;
 let isAiReady = false;
-let isCapturing = false;
 let isExtracting = false;
-let fullSpeedMode = false;
-let captureStream = null;
-let captureAudioContext = null;
 let _currentStep = null; // 'Extract' | 'Transcribe' | 'Translate'
 
 // Whisper initial-prompt presets. Whisper uses the prompt as preceding
@@ -180,7 +174,6 @@ function localizeHtml() {
 async function init() {
   await i18n.init();
   localizeHtml();
-  await connectBackground();
   await populateLanguageDropdowns();
   await loadSettings();
   setupEventListeners();
@@ -188,38 +181,6 @@ async function init() {
 }
 
 async function populateEngineInfo() {
-}
-
-async function connectBackground() {
-  backgroundPort = chrome.runtime.connect({ name: 'sidepanel' });
-
-  backgroundPort.onMessage.addListener(async (msg) => {
-    switch (msg.type) {
-      case 'ASR_REQUEST':
-        await handleAsrRequest(msg);
-        break;
-      case 'TRANSLATE_REQUEST':
-        await handleTranslateRequest(msg);
-        break;
-      case 'CONFIG_UPDATED':
-        await onConfigUpdated(msg.updates);
-        break;
-      case 'PLAYER_CLOSED':
-        onPlayerClosed();
-        break;
-      case 'EXTRACT_COMPLETE':
-        onExtractDone(msg.count);
-        break;
-      case 'CAPTURE_STOPPED':
-        onCaptureStopped();
-        break;
-    }
-  });
-
-  backgroundPort.onDisconnect.addListener(() => {
-    backgroundPort = null;
-    setTimeout(connectBackground, 1000);
-  });
 }
 
 async function populateLanguageDropdowns() {
@@ -260,9 +221,6 @@ async function loadSettings() {
   $('settingUiLang').value = config.uiLanguage || 'en';
   $('asrModelSelect').value = config.asrModel || 'base';
   $('engineSelect').value = config.translationEngine || 'auto';
-  $('settingFontSize').value = config.subtitleFontSize || 18;
-  $('settingFontColor').value = config.subtitleColor || '#FFD700';
-  $('settingBgOpacity').value = config.subtitleBgOpacity || 0.6;
 
   // Whisper prompt (UI-only state for now; not yet wired to worker)
   if (config.whisperPromptPreset) {
@@ -280,11 +238,11 @@ async function loadSettings() {
 function setModeCardsEnabled(enabled) {
   const cards = document.querySelectorAll('.mode-card');
   cards.forEach(c => c.classList.toggle('disabled', !enabled));
-  $('captureBtn').disabled = !enabled;
 }
 
 function setupEventListeners() {
   $('activateBtn').addEventListener('click', toggleAi);
+  $('reactivateBtn').addEventListener('click', reactivateAi);
 
   $('langToggle').addEventListener('change', async (e) => {
     const lang = e.target.value;
@@ -320,30 +278,12 @@ function setupEventListeners() {
     }
   });
 
-  $('captureBtn').addEventListener('click', toggleCapture);
-
-  $('fullSpeedToggle').addEventListener('click', toggleFullSpeed);
-
   $('sourceLang').addEventListener('change', async () => {
-    const val = $('sourceLang').value;
-    await saveConfig({ sourceLanguage: val });
-    try {
-      await chrome.runtime.sendMessage({
-        type: 'CONFIG_CHANGE',
-        updates: { sourceLanguage: val },
-      });
-    } catch {}
+    await saveConfig({ sourceLanguage: $('sourceLang').value });
   });
 
   $('targetLang').addEventListener('change', async () => {
-    const val = $('targetLang').value;
-    await saveConfig({ targetLanguage: val });
-    try {
-      await chrome.runtime.sendMessage({
-        type: 'CONFIG_CHANGE',
-        updates: { targetLanguage: val },
-      });
-    } catch {}
+    await saveConfig({ targetLanguage: $('targetLang').value });
   });
 
   // Whisper prompt (initial context) — UI only, not wired to worker yet
@@ -397,18 +337,6 @@ function setupEventListeners() {
     await loadSettings();
   });
 
-  $('settingFontSize').addEventListener('change', async () => {
-    await saveConfig({ subtitleFontSize: parseInt($('settingFontSize').value) });
-  });
-
-  $('settingFontColor').addEventListener('change', async () => {
-    await saveConfig({ subtitleColor: $('settingFontColor').value });
-  });
-
-  $('settingBgOpacity').addEventListener('input', async () => {
-    await saveConfig({ subtitleBgOpacity: parseFloat($('settingBgOpacity').value) });
-  });
-
   // Pipeline execute + download buttons
   $('executeBtn').addEventListener('click', executePipeline);
   $('dlExtract').addEventListener('click', downloadExtractedAudio);
@@ -418,6 +346,33 @@ function setupEventListeners() {
 
 async function toggleAi() {
   if (isAiReady) return;
+  const model = $('asrModelSelect').value;
+  await doActivate(model);
+}
+
+async function reactivateAi() {
+  if (!isAiReady) return;
+  isAiReady = false;
+  setModeCardsEnabled(false);
+  $('activateBtn').classList.add('hidden');
+  $('reactivateBtn').disabled = true;
+  $('reactivateBtn').classList.add('processing');
+
+  const whisperStatusEl = $('whisperStatus');
+  const translatorStatusEl = $('translatorStatus');
+  whisperStatusEl.textContent = 'unloading';
+  whisperStatusEl.className = 'sel-status sel-loading';
+  translatorStatusEl.textContent = 'unloading';
+  translatorStatusEl.className = 'sel-status sel-loading';
+
+  try {
+    await Promise.allSettled([whisper.unload(), translator.unload()]);
+  } catch (err) {
+    console.warn('[SidePanel] unload error:', err);
+  }
+
+  slidingWindow.clear();
+
   const model = $('asrModelSelect').value;
   await doActivate(model);
 }
@@ -510,6 +465,10 @@ async function doActivate(model) {
   if (whisperOk) {
     isAiReady = true;
     setModeCardsEnabled(true);
+    $('activateBtn').classList.add('hidden');
+    $('reactivateBtn').classList.remove('hidden');
+    $('reactivateBtn').disabled = false;
+    $('reactivateBtn').classList.remove('processing');
   } else {
     progressLabel.textContent = 'Whisper failed — extraction disabled';
   }
@@ -670,10 +629,14 @@ async function transcribeAudio() {
 
   const config = await loadConfig();
   const sourceLang = config.sourceLanguage || 'auto';
+  const whisperPrompt = (config.whisperPromptPreset && config.whisperPromptPreset !== 'general' && config.whisperPromptPreset !== 'custom')
+    ? PROMPT_PRESETS[config.whisperPromptPreset] || ''
+    : (config.whisperPrompt || '');
 
   try {
     const segments = await whisper.transcribeAll(audioData, {
       forceLanguage: sourceLang !== 'auto' ? sourceLang : null,
+      prompt: whisperPrompt || undefined,
     }, (pct, msg) => {
       setExtractProgress(pct, msg);
       if (isExtracting === false) throw new Error('Cancelled');
@@ -761,80 +724,6 @@ async function translateSubtitles() {
   isExtracting = false;
 }
 
-async function handleAsrRequest(msg) {
-  if (!msg.audio || !isAiReady) return;
-
-  setStatus('processing', i18n.t('status_transcribing'));
-
-  try {
-    const config = await loadConfig();
-    const sourceLang = config.sourceLanguage;
-
-    const result = await whisper.transcribe(msg.audio, {
-      forceLanguage: sourceLang !== 'auto' ? sourceLang : null,
-      returnTimestamps: true,
-    });
-
-    const detectedLang = result.detectedLanguage || sourceLang || 'en';
-
-    if (sourceLang === 'auto' && detectedLang) {
-      $('sourceLang').value = detectedLang;
-      await saveConfig({ sourceLanguage: detectedLang });
-    }
-
-    const merged = sentenceMerger.feed({
-      text: result.text,
-      start: msg.timestamp || 0,
-      end: (msg.timestamp || 0) + result.duration,
-    }, detectedLang);
-
-    if (merged) {
-      await translateAndSend(merged, detectedLang);
-    }
-
-    if (backgroundPort) {
-      backgroundPort.postMessage({
-        type: 'ASR_RESULT',
-        text: result.text,
-        detectedLanguage: detectedLang,
-        timestamp: msg.timestamp,
-        requestId: msg.requestId,
-      });
-    }
-
-    setStatus('ready', i18n.t('status_idle'));
-  } catch (err) {
-    console.error('[SidePanel] ASR error:', err);
-    setStatus('error', i18n.t('status_error', { error: err.message }));
-  }
-}
-
-async function handleTranslateRequest(msg) {
-  setStatus('processing', i18n.t('status_translating'));
-
-  try {
-    const translation = await translator.translate(
-      msg.text,
-      msg.sourceLang,
-      msg.targetLang,
-      msg.context || []
-    );
-
-    if (backgroundPort) {
-      backgroundPort.postMessage({
-        type: 'TRANSLATE_RESULT',
-        text: translation,
-        requestId: msg.requestId,
-      });
-    }
-
-    setStatus('ready', i18n.t('status_idle'));
-  } catch (err) {
-    console.error('[SidePanel] Translate error:', err);
-    setStatus('error', i18n.t('status_error', { error: err.message }));
-  }
-}
-
 async function translateAndSend(merged, detectedLang) {
   const config = await loadConfig();
   const targetLang = config.targetLanguage || 'zh';
@@ -867,19 +756,6 @@ async function translateAndSend(merged, detectedLang) {
     });
 
     addSubtitleCard(merged.start, merged.text, translation, rtl);
-
-    if (backgroundPort) {
-      backgroundPort.postMessage({
-        type: 'SUBTITLE_SYNC',
-        subtitles: [{
-          start: merged.start,
-          end: merged.end,
-          original: merged.text,
-          translation,
-          rtl,
-        }],
-      });
-    }
 
     updateExportButton();
   } catch (err) {
@@ -946,11 +822,17 @@ async function exportSrt() {
   $('exportBtn').disabled = true;
   $('exportBtn').textContent = i18n.t('status_exporting');
 
+  const bilingual = config.exportBilingual !== false;
+  const lang = bilingual ? (config.targetLanguage || 'zh') : (config.sourceLanguage || 'auto');
+  const base = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') : 'subtitles';
+  const filename = `${base}.${lang}.srt`;
+
   try {
     await srtExporter.download(
-      config.exportBilingual !== false,
+      bilingual,
       config.sourceLanguage,
-      config.targetLanguage
+      config.targetLanguage,
+      filename
     );
   } catch (err) {
     console.error('[SidePanel] Export failed:', err);
@@ -1049,16 +931,19 @@ function downloadExtractedAudio() {
   });
 }
 
-function downloadExtractedSrt() {
+async function downloadExtractedSrt() {
   if (srtExporter.getSegmentCount() === 0) {
     showToast('No subtitles to export');
     return;
   }
+  const config = await loadConfig();
   const content = srtExporter.exportOriginalOnly();
   const bom = '\uFEFF';
   const blob = new Blob([bom + content], { type: 'text/srt;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const name = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') + '_original.srt' : 'subtitles_original.srt';
+  const lang = config.sourceLanguage || 'auto';
+  const base = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') : 'subtitles';
+  const name = `${base}.${lang}.srt`;
   chrome.downloads.download({ url, filename: name, saveAs: true }, (downloadId) => {
     if (chrome.runtime.lastError) {
       console.error('[SidePanel] Download failed:', chrome.runtime.lastError.message);
@@ -1073,18 +958,21 @@ function downloadExtractedSrt() {
   });
 }
 
-function downloadTranslatedSrt() {
+async function downloadTranslatedSrt() {
   if (srtExporter.getSegmentCount() === 0) {
     showToast('No translated subtitles to export');
     return;
   }
+  const config = await loadConfig();
   const content = srtExporter.exportBilingual();
   console.log('[Download] exportBilingual first 500 chars:', content.substring(0, 500));
   console.log('[Download] segments:', srtExporter.getSegments().slice(0, 5).map(s => ({ i: s.index, orig: s.original.substring(0, 30), tr: (s.translation || '').substring(0, 30) })));
   const bom = '\uFEFF';
   const blob = new Blob([bom + content], { type: 'text/srt;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const name = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') + '_bilingual.srt' : 'subtitles_bilingual.srt';
+  const lang = config.targetLanguage || 'zh';
+  const base = currentFile ? currentFile.name.replace(/\.[^.]+$/, '') : 'subtitles';
+  const name = `${base}.${lang}.srt`;
   chrome.downloads.download({ url, filename: name, saveAs: true }, (downloadId) => {
     if (chrome.runtime.lastError) {
       console.error('[SidePanel] Download failed:', chrome.runtime.lastError.message);
@@ -1097,139 +985,6 @@ function downloadTranslatedSrt() {
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     }
   });
-}
-
-async function toggleCapture() {
-  if (isCapturing) {
-    await stopCapture();
-  } else {
-    await startCapture();
-  }
-}
-
-async function startCapture() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) {
-      setStatus('error', i18n.t('error_capture_no_tab'));
-      return;
-    }
-
-    if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('about:'))) {
-      setStatus('error', i18n.t('error_capture_chrome_page'));
-      return;
-    }
-
-    setStatus('processing', i18n.t('status_requesting_capture'));
-
-    const streamId = await chrome.runtime.sendMessage({
-      type: 'GET_CAPTURE_STREAM_ID',
-      targetTabId: tab.id,
-    });
-
-    if (!streamId || streamId.error) {
-      const msg = streamId?.error || '';
-      if (msg.includes('not been invoked') || msg.includes('activeTab')) {
-        setStatus('error', i18n.t('error_capture_switch_tab'));
-        $('captureInfo').classList.remove('hidden');
-        $('captureInfo').innerHTML = '<span class="mode-info-dot"></span><span>' + i18n.t('hint_capture_retry') + '</span>';
-        showToast(i18n.t('hint_capture_retry'));
-      } else {
-        setStatus('error', msg || i18n.t('error_capture_no_tab'));
-      }
-      return;
-    }
-
-    captureStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        mandatory: {
-          chromeMediaSource: 'tab',
-          chromeMediaSourceId: streamId,
-        },
-      },
-    });
-
-    await chrome.runtime.sendMessage({
-      type: 'CAPTURE_START',
-      tabId: tab.id,
-    }).catch(() => {});
-
-    $('captureBtn').innerHTML = '<span class="btn-icon">⏹</span><span class="btn-text">' + i18n.t('btn_stop_capture') + '</span>';
-    $('captureBtn').classList.add('capturing');
-    $('captureInfo').classList.remove('hidden');
-    $('modeOnline').classList.add('active');
-    isCapturing = true;
-
-    await audioProcessor.captureTabAudio(captureStream, {
-      onData: async (chunk) => {
-        if (!isAiReady) return;
-
-        const result = await whisper.transcribe(chunk.data, {
-          returnTimestamps: true,
-        });
-
-        const config = await loadConfig();
-        const sourceLang = config.sourceLanguage;
-        const detectedLang = result.detectedLanguage || sourceLang || 'en';
-
-        const merged = sentenceMerger.feed({
-          text: result.text,
-          start: chunk.timestamp / 1000,
-          end: (chunk.timestamp / 1000) + chunk.duration,
-        }, detectedLang);
-
-        if (merged) {
-          await translateAndSend(merged, detectedLang);
-        }
-      },
-      chunkInterval: 5,
-    });
-
-  } catch (err) {
-    console.error('[SidePanel] Capture error:', err);
-    setStatus('error', err.message);
-    await stopCapture();
-  }
-}
-
-async function stopCapture() {
-  if (captureStream) {
-    captureStream.getTracks().forEach(t => t.stop());
-    captureStream = null;
-  }
-
-  await chrome.runtime.sendMessage({ type: 'CAPTURE_STOP' });
-
-  isCapturing = false;
-  $('captureBtn').innerHTML = '<span class="btn-icon">🎤</span><span class="btn-text">' + i18n.t('btn_capture_audio') + '</span>';
-  $('captureBtn').classList.remove('capturing');
-  $('captureInfo').classList.add('hidden');
-  $('modeOnline').classList.remove('active');
-}
-
-function onCaptureStopped() {
-  isCapturing = false;
-  $('captureBtn').innerHTML = '<span class="btn-icon">🎤</span><span class="btn-text">' + i18n.t('btn_capture_audio') + '</span>';
-  $('captureBtn').classList.remove('capturing');
-  $('captureInfo').classList.add('hidden');
-  $('modeOnline').classList.remove('active');
-}
-
-function toggleFullSpeed() {
-  fullSpeedMode = !fullSpeedMode;
-  $('fullSpeedToggle').classList.toggle('active', fullSpeedMode);
-}
-
-function onConfigUpdated(updates) {
-  if (updates.sourceLanguage !== undefined) {
-    $('sourceLang').value = updates.sourceLanguage;
-  }
-  if (updates.targetLanguage !== undefined) {
-    $('targetLang').value = updates.targetLanguage;
-  }
-}
-
-function onPlayerClosed() {
 }
 
 function setStatus(type, text) {

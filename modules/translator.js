@@ -560,6 +560,20 @@ class Translator {
   getEngine() { return this._engine; }
   isReady() { return this._ready; }
 
+  async unload() {
+    if (this._gemini) {
+      this._gemini._translator = null;
+      this._gemini._ready = false;
+    }
+    if (this._workerPool) {
+      this._workerPool.unload();
+      this._workerPool = null;
+    }
+    this._engine = null;
+    this._ready = false;
+    this._lastError = '';
+  }
+
   getEngineDetail() {
     if (this._engine === 'gemini-nano') {
       return { engine: 'Chrome Translator (Gemini Nano)', available: true, detail: '' };

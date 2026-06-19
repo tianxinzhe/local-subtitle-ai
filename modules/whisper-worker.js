@@ -6,7 +6,6 @@ const MODEL_REPO = {
   small: 'Xenova/whisper-small',
   medium: 'Xenova/whisper-medium',
   'large-v3': 'Xenova/whisper-large-v3',
-  'large-v3-turbo': 'Xenova/whisper-large-v3-turbo',
 };
 
 let pipe = null;
@@ -20,7 +19,7 @@ self.addEventListener('message', (e) => {
       if (type === 'load') {
         env.backends.onnx.wasm.wasmPaths = payload.wasmPaths;
 
-        const model = payload.model || 'tiny';
+        const model = payload.model || 'base';
         const modelId = MODEL_REPO[model];
 
         pipe = await pipeline('automatic-speech-recognition', modelId, {
@@ -43,6 +42,10 @@ self.addEventListener('message', (e) => {
           chunk_length_s: opts.chunk_length_s || 30,
           stride_length_s: opts.stride_length_s || 0,
         };
+
+        if (opts.prompt) {
+          pipelineOptions.prompt = opts.prompt;
+        }
 
         if (opts.forceLanguage) {
           pipelineOptions.language = opts.forceLanguage;

@@ -13,17 +13,11 @@
   "permissions": [
     "sidePanel",
     "storage",
-    "tabs",
-    "activeTab",
-    "tabCapture",
     "downloads"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self' https://huggingface.co https://*.huggingface.co https://cdn-lfs.huggingface.co https://*.cdn-lfs.huggingface.co https://*.xethub.hf.co https://cdn.hf.co https://*.cdn.hf.co https://hf-mirror.com https://*.hf-mirror.com; object-src 'self'"
   },
-  "host_permissions": [
-    "<all_urls>"
-  ],
   "side_panel": {
     "default_path": "sidepanel/index.html"
   },

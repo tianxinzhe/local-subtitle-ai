@@ -42,7 +42,6 @@
               <option value="small" data-i18n="option_small_model">Whisper Small (460MB)</option>
               <option value="medium" data-i18n="option_medium_model">Whisper Medium (1.5GB)</option>
               <option value="large-v3" data-i18n="option_large_v3_model">Whisper Large v3 (2.9GB)</option>
-              <option value="large-v3-turbo" data-i18n="option_large_v3_turbo_model">Whisper Turbo (1.6GB)</option>
             </select>
             <span class="sel-status" id="whisperStatus">-</span>
           </div>
@@ -60,6 +59,9 @@
         <button id="activateBtn" class="primary-btn">
           <span class="btn-ring"></span>
           <span class="btn-label" data-i18n="btn_activate_ai">Activate All Models</span>
+        </button>
+        <button id="reactivateBtn" class="primary-btn hidden">
+          <span class="btn-label" data-i18n="btn_reactivate_ai">Re-activate</span>
         </button>
 
         <div id="progressContainer" class="hidden">
@@ -111,30 +113,6 @@
       </section>
 
       <section id="modeSection">
-        <div id="modeOnline" class="mode-card hidden" data-mode="online">
-          <div class="mode-card-header">
-            <span class="mode-icon">🖥</span>
-            <span class="mode-label" data-i18n="mode_online">Online Playback</span>
-          </div>
-          <p class="mode-desc" data-i18n="mode_online_desc">Click the AI icon (top-right toolbar) on your video page, then capture</p>
-          <div class="mode-actions">
-            <button id="captureBtn" class="mode-action-btn capture-btn" disabled>
-              <span class="btn-icon">🎤</span>
-              <span class="btn-text" data-i18n="btn_capture_audio">Start Capture</span>
-            </button>
-            <button id="fullSpeedToggle" class="mode-icon-btn" data-i18n-title="tooltip_full_speed" title="Fast mode">
-              <span>⚡</span>
-            </button>
-          </div>
-          <div id="captureInfo" class="mode-info hidden">
-            <span class="mode-info-dot recording"></span>
-            <span data-i18n="status_capturing">Capturing tab audio...</span>
-          </div>
-          <div id="captureHint" class="mode-hint">
-            <span data-i18n="hint_capture_flow">1. Go to video page  2. Click AI icon in toolbar  3. Click Start Capture</span>
-          </div>
-        </div>
-
         <div id="modeLocal" class="mode-card" data-mode="local">
           <div class="mode-card-header">
             <span class="mode-icon">📁</span>
@@ -199,18 +177,6 @@
             <option value="es">Español</option>
             <option value="ru">Русский</option>
           </select>
-        </div>
-        <div class="setting-row">
-          <label for="settingFontSize" data-i18n="setting_subtitle_font_size">Font Size</label>
-          <input type="number" id="settingFontSize" min="12" max="48" value="18">
-        </div>
-        <div class="setting-row">
-          <label for="settingFontColor" data-i18n="setting_subtitle_color">Font Color</label>
-          <input type="color" id="settingFontColor" value="#FFD700">
-        </div>
-        <div class="setting-row">
-          <label for="settingBgOpacity" data-i18n="setting_subtitle_bg_opacity">Background Opacity</label>
-          <input type="range" id="settingBgOpacity" min="0" max="1" step="0.1" value="0.6">
         </div>
       </div>
 

@@ -8,7 +8,6 @@ const MODEL_REPO = {
   small: 'Xenova/whisper-small',
   medium: 'Xenova/whisper-medium',
   'large-v3': 'Xenova/whisper-large-v3',
-  'large-v3-turbo': 'Xenova/whisper-large-v3-turbo',
 };
 
 const MODEL_VERSION = {
@@ -17,7 +16,6 @@ const MODEL_VERSION = {
   small: '1.0.0',
   medium: '1.0.0',
   'large-v3': '1.0.0',
-  'large-v3-turbo': '1.0.0',
 };
 
 let pipeline = null;
@@ -31,7 +29,7 @@ class WhisperEngine {
   }
 
   async load(options = {}) {
-    const model = options.model || await get('asrModel') || 'tiny';
+    const model = options.model || await get('asrModel') || 'base';
     const onProgress = options.onProgress || (() => {});
 
     if (this._ready && this._modelType === model) {
@@ -133,6 +131,10 @@ class WhisperEngine {
       stride_length_s: options.strideLength || 5,
     };
 
+    if (options.prompt) {
+      pipelineOptions.prompt = options.prompt;
+    }
+
     if (forceLanguage) {
       pipelineOptions.language = forceLanguage;
       pipelineOptions.forced_decoder_ids = this._pipeline.tokenizer
@@ -228,7 +230,7 @@ class WhisperWorkerEngine {
     // Use deviceMemory API if available (Chrome-only, returns GB)
     const memGB = navigator.deviceMemory || 8;
     const cpuCores = navigator.hardwareConcurrency || 4;
-    const perWorkerMB = { tiny: 150, base: 250, small: 500, medium: 900, 'large-v3-turbo': 1200, 'large-v3': 1800 };
+    const perWorkerMB = { tiny: 150, base: 250, small: 500, medium: 900, 'large-v3': 1800 };
     const perWorker = perWorkerMB[model] || 300;
     const maxByMem = Math.max(1, Math.floor((memGB * 1024 * 0.6) / perWorker));
     const maxByCpu = Math.max(1, Math.floor(cpuCores * 0.5));
@@ -236,7 +238,7 @@ class WhisperWorkerEngine {
   }
 
   async load(options = {}) {
-    const model = options.model || await get('asrModel') || 'tiny';
+    const model = options.model || await get('asrModel') || 'base';
     const onProgress = options.onProgress || (() => {});
 
     if (this._ready && this._modelType === model) return;
@@ -463,6 +465,7 @@ class WhisperWorkerEngine {
               options: {
                 return_timestamps: true,
                 forceLanguage: options.forceLanguage || null,
+                prompt: options.prompt || null,
               },
             }, [chunk.data.buffer], 480000);
             completedChunks++;
@@ -543,6 +546,7 @@ class WhisperWorkerEngine {
         stride_length_s: options.strideLength,
         forceLanguage: options.forceLanguage,
         language: options.language,
+        prompt: options.prompt || null,
       },
     }, [input.buffer]);
   }

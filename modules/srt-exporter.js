@@ -120,9 +120,8 @@ class SrtExporter {
     }
 
     if (!filename) {
-      const now = Date.now();
-      const ext = bilingual ? '_bilingual' : '';
-      filename = `Local_AI_Subtitle${ext}_${now}.srt`;
+      const lang = bilingual ? (targetLang || 'zh') : (sourceLang || 'auto');
+      filename = `subtitles.${lang}.srt`;
     }
 
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });

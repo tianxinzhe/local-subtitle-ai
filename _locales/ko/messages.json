@@ -1,107 +1,239 @@
-{
-  "app_name": { "message": "로컬 AI 자막 Pro" },
-  "app_description": { "message": "100% 오프라인 AI 자막 생성기. 99+ 언어 지원. 프라이버시 최우선, 서버 불필요." },
-
-  "sidepanel_title": { "message": "AI 자막" },
-
-  "btn_activate_ai": { "message": "로컬 AI 활성화" },
-  "btn_ai_processing": { "message": "● AI 처리 중" },
-  "btn_capture_audio": { "message": "탭 오디오 캡처" },
-  "btn_stop_capture": { "message": "캡처 중지" },
-  "btn_export_srt": { "message": "이중언어 SRT 내보내기" },
-  "btn_drop_video": { "message": "비디오 파일을 드롭하세요" },
-
-  "label_source_lang": { "message": "소스 언어" },
-  "label_target_lang": { "message": "대상 언어" },
-  "label_ui_lang": { "message": "인터페이스 언어" },
-  "label_asr_model": { "message": "ASR 모델" },
-  "label_settings": { "message": "설정" },
-  "label_subtitles": { "message": "자막" },
-  "label_export": { "message": "내보내기" },
-  "label_detected": { "message": "감지됨" },
-  "label_processing": { "message": "처리 중" },
-  "label_status": { "message": "상태" },
-  "label_no_subtitles": { "message": "아직 자막이 없습니다" },
-
-  "option_auto_detect": { "message": "자동 감지" },
-  "option_tiny_model": { "message": "Whisper Tiny (75MB, 빠름)" },
-  "option_base_model": { "message": "Whisper Base (140MB, 정확)" },
-  "option_small_model": { "message": "Whisper Small (460MB, 양호)" },
-  "option_medium_model": { "message": "Whisper Medium (1.5GB, 고품질)" },
-  "option_large_v3_model": { "message": "Whisper Large v3 (2.9GB, 최고 품질)" },
-  "option_large_v3_turbo_model": { "message": "Whisper Turbo (1.6GB, 빠름+품질)" },
-
-  "status_idle": { "message": "준비" },
-  "status_downloading_model": { "message": "모델 다운로드 중... {{progress}}%" },
-  "status_loading_model": { "message": "모델을 메모리에 로딩 중..." },
-  "status_model_ready": { "message": "모델 로드 완료. 인식 가능합니다." },
-  "status_model_failed": { "message": "ASR 모델 로드 실패. 다시 시도해주세요." },
-  "status_transcribing": { "message": "텍스트 변환 중..." },
-  "status_translating": { "message": "번역 중..." },
-  "status_capturing": { "message": "탭 오디오 캡처 중..." },
-  "status_exporting": { "message": "SRT 내보내기 중..." },
-  "status_generating_full": { "message": "고속 모드: 자막 일괄 생성 중..." },
-  "status_complete": { "message": "완료. {{count}}개 세그먼트 생성됨." },
-  "status_error": { "message": "오류: {{error}}" },
-
-  "hint_drop_file": { "message": "비디오 파일을 드롭하세요 (최대 50GB)" },
-  "hint_drag_to_player": { "message": "비디오 파일을 드롭하거나 사이드 패널을 사용하세요" },
-  "hint_export_done": { "message": "SRT 파일 내보내기 성공" },
-  "hint_no_file": { "message": "비디오 파일이 로드되지 않았습니다" },
-  "mode_online": { "message": "온라인 재생" },
-  "mode_online_desc": { "message": "Click Chrome toolbar icon on the video tab first, then capture" },
-  "mode_local": { "message": "로컬 파일" },
-  "mode_local_desc": { "message": "기기에서 동영상 또는 오디오 파일 열기" },
-
-  "error_capture_switch_tab": { "message": "Switch to the target tab, then close and reopen this panel by clicking the AI icon on that tab" },
-  "hint_capture_retry": { "message": "Make the video tab active → click AI icon → try Capture again" },
-  "error_capture_no_tab": { "message": "No active browser tab found" },
-  "error_capture_chrome_page": { "message": "Cannot capture Chrome internal pages" },
-  "status_requesting_capture": { "message": "Requesting audio stream..." },
-  "hint_capture_flow": { "message": "1. Go to video page  2. Click AI icon in toolbar  3. Click Start Capture" },
-
-  "tooltip_full_speed": { "message": "고속 무음 추출 (10x-20x 가속)" },
-
-  "setting_section_general": { "message": "일반" },
-  "setting_section_asr": { "message": "음성 인식" },
-  "setting_section_translate": { "message": "번역" },
-  "setting_section_subtitle": { "message": "자막 표시" },
-  "setting_ui_language_desc": { "message": "확장 프로그램 UI 언어" },
-  "setting_source_lang_desc": { "message": "비디오에서 사용되는 언어 (자동 감지 권장)" },
-  "setting_target_lang_desc": { "message": "자막 번역 대상 언어" },
-  "setting_asr_model_desc": { "message": "Whisper 모델 크기. 클수록 정확하지만 느림" },
-  "setting_subtitle_font_size": { "message": "글꼴 크기" },
-  "setting_subtitle_color": { "message": "글꼴 색상" },
-  "setting_subtitle_bg_opacity": { "message": "배경 투명도" },
-  "setting_export_bilingual": { "message": "이중언어 SRT (원문+번역)" },
-  "setting_sliding_window": { "message": "컨텍스트 창 크기" },
-  "setting_sliding_window_desc": { "message": "AI로 전송되는 이전 문장 수. 문맥 인식 번역에 사용" },
-  "setting_capture_interval": { "message": "캡처 간격 (초)" },
-
-  "msg_translation_engine": { "message": "번역 엔진" },
-  "msg_engine_gemini": { "message": "Chrome 내장 AI (Gemini Nano)" },
-  "msg_engine_onnx": { "message": "로컬 ONNX 모델 (NLLB-200)" },
-  "msg_engine_unavailable": { "message": "번역 엔진을 사용할 수 없습니다. 설정을 확인하세요." },
-  "msg_gemini_unavailable": { "message": "Gemini Nano를 사용할 수 없습니다. ONNX 대체 모델 다운로드 중..." },
-  "msg_download_nllb": { "message": "번역 모델 다운로드 중 ({{size}}MB)..." },
-
-  "time_just_now": { "message": "방금" },
-  "time_seconds_ago": { "message": "{{secs}}초 전" },
-
-  "model_picker_title": { "message": "Whisper 모델 선택" },
-  "model_picker_desc": { "message": "다운로드 전에 모델 크기를 선택하세요. 클수록 정확하지만 느립니다." },
-  "model_picker_confirm": { "message": "다운로드 및 활성화" },
-  "model_tiny_desc": { "message": "가장 빠름, 정확도 낮음" },
-  "model_base_desc": { "message": "대부분의 용도에 적합" },
-  "model_small_desc": { "message": "더 나은 정확도, 적당한 속도" },
-  "model_medium_desc": { "message": "고품질, 느림" },
-  "model_turbo_desc": { "message": "빠름+고품질 (권장)" },
-  "model_large_desc": { "message": "최고 정확도, 가장 느림" },
-  "tab_setup": { "message": "설정" },
-  "tab_subtitles": { "message": "자막" },
-  "label_engine": { "message": "엔진" },
-  "engine_auto": { "message": "자동" },
-  "engine_gemini": { "message": "Gemini Nano" },
-  "engine_m2m100": { "message": "M2M100-418M" },
-  "btn_execute": { "message": "실행" }
+﻿{
+  "app_name": {
+    "message": "로컬 AI 자막 Pro"
+  },
+  "app_description": {
+    "message": "100% 오프라인 AI 자막 생성기. 99+ 언어 지원. 프라이버시 최우선, 서버 불필요."
+  },
+  "sidepanel_title": {
+    "message": "AI 자막"
+  },
+  "btn_activate_ai": {
+    "message": "로컬 AI 활성화"
+  },
+  "btn_ai_processing": {
+    "message": "● AI 처리 중"
+  },
+  "btn_export_srt": {
+    "message": "이중언어 SRT 내보내기"
+  },
+  "btn_drop_video": {
+    "message": "비디오 파일을 드롭하세요"
+  },
+  "label_source_lang": {
+    "message": "소스 언어"
+  },
+  "label_target_lang": {
+    "message": "대상 언어"
+  },
+  "label_ui_lang": {
+    "message": "인터페이스 언어"
+  },
+  "label_asr_model": {
+    "message": "ASR 모델"
+  },
+  "label_settings": {
+    "message": "설정"
+  },
+  "label_subtitles": {
+    "message": "자막"
+  },
+  "label_export": {
+    "message": "내보내기"
+  },
+  "label_detected": {
+    "message": "감지됨"
+  },
+  "label_processing": {
+    "message": "처리 중"
+  },
+  "label_status": {
+    "message": "상태"
+  },
+  "label_no_subtitles": {
+    "message": "아직 자막이 없습니다"
+  },
+  "option_auto_detect": {
+    "message": "자동 감지"
+  },
+  "option_tiny_model": {
+    "message": "Whisper Tiny (75MB, 빠름)"
+  },
+  "option_base_model": {
+    "message": "Whisper Base (140MB, 정확)"
+  },
+  "option_small_model": {
+    "message": "Whisper Small (460MB, 양호)"
+  },
+  "option_medium_model": {
+    "message": "Whisper Medium (1.5GB, 고품질)"
+  },
+  "option_large_v3_model": {
+    "message": "Whisper Large v3 (2.9GB, 최고 품질)"
+  },
+  "option_large_v3_turbo_model": {
+    "message": "Whisper Turbo (1.6GB, 빠름+품질)"
+  },
+  "status_idle": {
+    "message": "준비"
+  },
+  "status_downloading_model": {
+    "message": "모델 다운로드 중... {{progress}}%"
+  },
+  "status_loading_model": {
+    "message": "모델을 메모리에 로딩 중..."
+  },
+  "status_model_ready": {
+    "message": "모델 로드 완료. 인식 가능합니다."
+  },
+  "status_model_failed": {
+    "message": "ASR 모델 로드 실패. 다시 시도해주세요."
+  },
+  "status_transcribing": {
+    "message": "텍스트 변환 중..."
+  },
+  "status_translating": {
+    "message": "번역 중..."
+  },
+  "status_exporting": {
+    "message": "SRT 내보내기 중..."
+  },
+  "status_complete": {
+    "message": "완료. {{count}}개 세그먼트 생성됨."
+  },
+  "status_error": {
+    "message": "오류: {{error}}"
+  },
+  "hint_drop_file": {
+    "message": "비디오 파일을 드롭하세요 (최대 50GB)"
+  },
+  "hint_export_done": {
+    "message": "SRT 파일 내보내기 성공"
+  },
+  "hint_no_file": {
+    "message": "비디오 파일이 로드되지 않았습니다"
+  },
+  "mode_local": {
+    "message": "로컬 파일"
+  },
+  "mode_local_desc": {
+    "message": "기기에서 동영상 또는 오디오 파일 열기"
+  },
+  "setting_section_general": {
+    "message": "일반"
+  },
+  "setting_section_asr": {
+    "message": "음성 인식"
+  },
+  "setting_section_translate": {
+    "message": "번역"
+  },
+  "setting_section_subtitle": {
+    "message": "자막 표시"
+  },
+  "setting_ui_language_desc": {
+    "message": "확장 프로그램 UI 언어"
+  },
+  "setting_source_lang_desc": {
+    "message": "비디오에서 사용되는 언어 (자동 감지 권장)"
+  },
+  "setting_target_lang_desc": {
+    "message": "자막 번역 대상 언어"
+  },
+  "setting_asr_model_desc": {
+    "message": "Whisper 모델 크기. 클수록 정확하지만 느림"
+  },
+  "setting_subtitle_font_size": {
+    "message": "글꼴 크기"
+  },
+  "setting_subtitle_color": {
+    "message": "글꼴 색상"
+  },
+  "setting_subtitle_bg_opacity": {
+    "message": "배경 투명도"
+  },
+  "setting_export_bilingual": {
+    "message": "이중언어 SRT (원문+번역)"
+  },
+  "setting_sliding_window": {
+    "message": "컨텍스트 창 크기"
+  },
+  "setting_sliding_window_desc": {
+    "message": "AI로 전송되는 이전 문장 수. 문맥 인식 번역에 사용"
+  },
+  "msg_translation_engine": {
+    "message": "번역 엔진"
+  },
+  "msg_engine_gemini": {
+    "message": "Chrome 내장 AI (Gemini Nano)"
+  },
+  "msg_engine_onnx": {
+    "message": "로컬 ONNX 모델 (NLLB-200)"
+  },
+  "msg_engine_unavailable": {
+    "message": "번역 엔진을 사용할 수 없습니다. 설정을 확인하세요."
+  },
+  "msg_gemini_unavailable": {
+    "message": "Gemini Nano를 사용할 수 없습니다. ONNX 대체 모델 다운로드 중..."
+  },
+  "msg_download_nllb": {
+    "message": "번역 모델 다운로드 중 ({{size}}MB)..."
+  },
+  "time_just_now": {
+    "message": "방금"
+  },
+  "time_seconds_ago": {
+    "message": "{{secs}}초 전"
+  },
+  "model_picker_title": {
+    "message": "Whisper 모델 선택"
+  },
+  "model_picker_desc": {
+    "message": "다운로드 전에 모델 크기를 선택하세요. 클수록 정확하지만 느립니다."
+  },
+  "model_picker_confirm": {
+    "message": "다운로드 및 활성화"
+  },
+  "model_tiny_desc": {
+    "message": "가장 빠름, 정확도 낮음"
+  },
+  "model_base_desc": {
+    "message": "대부분의 용도에 적합"
+  },
+  "model_small_desc": {
+    "message": "더 나은 정확도, 적당한 속도"
+  },
+  "model_medium_desc": {
+    "message": "고품질, 느림"
+  },
+  "model_turbo_desc": {
+    "message": "빠름+고품질 (권장)"
+  },
+  "model_large_desc": {
+    "message": "최고 정확도, 가장 느림"
+  },
+  "tab_setup": {
+    "message": "설정"
+  },
+  "tab_subtitles": {
+    "message": "자막"
+  },
+  "label_engine": {
+    "message": "엔진"
+  },
+  "engine_auto": {
+    "message": "자동"
+  },
+  "engine_gemini": {
+    "message": "Gemini Nano"
+  },
+  "engine_m2m100": {
+    "message": "M2M100-418M"
+  },
+  "btn_execute": {
+    "message": "실행"
+  },
+  "btn_reactivate_ai": {
+    "message": "다시 활성화"
+  }
 }

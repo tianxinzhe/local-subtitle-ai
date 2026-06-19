@@ -1,139 +1,326 @@
-{
-  "app_name": { "message": "Local AI Subtitles Pro" },
-  "app_description": { "message": "100% offline AI-powered subtitle generator supporting 99+ languages. Privacy-first, no server dependency." },
-
-  "sidepanel_title": { "message": "AI Subtitles" },
-
-  "btn_activate_ai": { "message": "Activate Local AI" },
-  "btn_ai_processing": { "message": "● AI Processing" },
-  "btn_capture_audio": { "message": "Capture Tab Audio" },
-  "btn_stop_capture": { "message": "Stop Capture" },
-  "btn_export_srt": { "message": "Export Bilingual SRT" },
-  "btn_drop_video": { "message": "Drop video file here" },
-
-  "label_source_lang": { "message": "Source Language" },
-  "label_target_lang": { "message": "Target Language" },
-  "prompt_section_title": { "message": "Transcription Context (Whisper hint)" },
-  "prompt_preset_label": { "message": "Preset:" },
-  "prompt_preset_general": { "message": "General" },
-  "prompt_preset_tech": { "message": "Tech / Programming" },
-  "prompt_preset_medical": { "message": "Medical / Healthcare" },
-  "prompt_preset_legal": { "message": "Legal / Court" },
-  "prompt_preset_finance": { "message": "Finance / Business" },
-  "prompt_preset_education": { "message": "Education / Lecture" },
-  "prompt_preset_interview": { "message": "Interview / Podcast" },
-  "prompt_preset_gaming": { "message": "Gaming / Entertainment" },
-  "prompt_preset_custom": { "message": "Custom" },
-  "prompt_placeholder": { "message": "e.g. Speaker: 张三, 李四. Topics: 量子计算, Transformer, LLM." },
-  "prompt_hint": { "message": "This text is fed to Whisper as initial context to bias recognition toward domain terminology, proper nouns, and speaking style." },
-  "label_ui_lang": { "message": "Interface Language" },
-  "label_asr_model": { "message": "ASR Model" },
-  "label_settings": { "message": "Settings" },
-  "label_subtitles": { "message": "Subtitles" },
-  "label_export": { "message": "Export" },
-  "label_detected": { "message": "Detected" },
-  "label_processing": { "message": "Processing" },
-  "label_status": { "message": "Status" },
-  "label_no_subtitles": { "message": "No subtitles yet" },
-
-  "option_auto_detect": { "message": "Auto Detect" },
-  "option_tiny_model": { "message": "Whisper Tiny (75MB, Faster)" },
-  "option_base_model": { "message": "Whisper Base (140MB, More Accurate)" },
-  "option_small_model": { "message": "Whisper Small (460MB, Better)" },
-  "option_medium_model": { "message": "Whisper Medium (1.5GB, High Quality)" },
-  "option_large_v3_model": { "message": "Whisper Large v3 (2.9GB, Best Quality)" },
-  "option_large_v3_turbo_model": { "message": "Whisper Turbo (1.6GB, Fast + Quality)" },
-
-  "status_idle": { "message": "Ready" },
-  "status_downloading_model": { "message": "Downloading model... {{progress}}%" },
-  "status_loading_model": { "message": "Loading model into memory..." },
-  "status_model_ready": { "message": "Model loaded. Ready to transcribe." },
-  "status_model_failed": { "message": "Failed to load ASR model. Please try again." },
-  "status_transcribing": { "message": "Transcribing..." },
-  "status_translating": { "message": "Translating..." },
-  "status_capturing": { "message": "Capturing tab audio..." },
-  "status_exporting": { "message": "Exporting SRT..." },
-  "status_generating_full": { "message": "Full speed mode: generating subtitles..." },
-  "status_complete": { "message": "Completed. {{count}} segments generated." },
-  "status_error": { "message": "Error: {{error}}" },
-
-  "hint_drop_file": { "message": "Drop a video file to start (up to 50GB)" },
-  "hint_drag_to_player": { "message": "Drag a video file here or use the side panel" },
-  "hint_export_done": { "message": "SRT file exported successfully" },
-  "hint_no_file": { "message": "No video file loaded" },
-  "mode_online": { "message": "Online Playback" },
-  "mode_online_desc": { "message": "Click Chrome toolbar icon on the video tab first, then capture" },
-  "mode_local": { "message": "Local File" },
-  "mode_local_desc": { "message": "Open a video or audio file from your device" },
-
-  "error_capture_switch_tab": { "message": "Switch to the target tab, then close and reopen this panel by clicking the AI icon on that tab" },
-  "hint_capture_retry": { "message": "Make the video tab active → click AI icon → try Capture again" },
-  "error_capture_no_tab": { "message": "No active browser tab found" },
-  "error_capture_chrome_page": { "message": "Cannot capture Chrome internal pages" },
-  "btn_play": { "message": "Play" },
-  "btn_extract": { "message": "Extract Subtitles" },
-  "status_extracting_audio": { "message": "Extracting audio..." },
-  "status_extracting_progress": { "message": "Extracting subtitles... {{progress}}%" },
-  "status_transcribing_all": { "message": "Transcribing: {{current}}/{{total}}" },
-  "status_translating_all": { "message": "Translating: {{current}}/{{total}}" },
-  "status_extract_done": { "message": "Done. {{count}} subtitles generated." },
-  "status_requesting_capture": { "message": "Requesting audio stream..." },
-  "hint_capture_flow": { "message": "1. Go to video page  2. Click AI icon in toolbar  3. Click Start Capture" },
-
-  "tooltip_full_speed": { "message": "Full speed silent extraction (10x-20x faster)" },
-
-  "btn_download_audio": { "message": "Download Audio (WAV)" },
-  "btn_download_srt": { "message": "Download Subtitles (SRT)" },
-  "btn_download_translated": { "message": "Download Translated (SRT)" },
-
-  "btn_extract_audio": { "message": "Extract Audio" },
-  "btn_transcribe": { "message": "Transcribe" },
-  "btn_translate": { "message": "Translate" },
-
-  "setting_section_general": { "message": "General" },
-  "setting_section_asr": { "message": "Speech Recognition" },
-  "setting_section_translate": { "message": "Translation" },
-  "setting_section_subtitle": { "message": "Subtitle Display" },
-  "setting_ui_language_desc": { "message": "Language for extension UI" },
-  "setting_source_lang_desc": { "message": "Language spoken in the video (Auto Detect recommended)" },
-  "setting_target_lang_desc": { "message": "Language for translated subtitles" },
-  "setting_asr_model_desc": { "message": "Whisper model size. Larger = more accurate but slower" },
-  "setting_subtitle_font_size": { "message": "Font Size" },
-  "setting_subtitle_color": { "message": "Font Color" },
-  "setting_subtitle_bg_opacity": { "message": "Background Opacity" },
-  "setting_export_bilingual": { "message": "Bilingual SRT (Original + Translation)" },
-  "setting_sliding_window": { "message": "Context Window Size" },
-  "setting_sliding_window_desc": { "message": "Number of previous sentences sent to AI for context-aware translation" },
-  "setting_capture_interval": { "message": "Capture Interval (seconds)" },
-
-  "status_loading_whisper": { "message": "[1/2] Downloading speech model (Whisper)... {{progress}}%" },
-  "status_loading_translator": { "message": "[2/2] Loading translation engine..." },
-
-  "msg_translation_engine": { "message": "Translation Engine" },
-  "msg_engine_gemini": { "message": "Chrome Built-in AI (Gemini Nano)" },
-  "msg_engine_onnx": { "message": "Local ONNX Model (NLLB-200)" },
-  "msg_engine_unavailable": { "message": "Translation engine unavailable. Please check settings." },
-  "msg_gemini_unavailable": { "message": "Gemini Nano not available. Downloading ONNX fallback..." },
-  "msg_download_nllb": { "message": "Downloading translation model ({{size}}MB)..." },
-
-  "time_just_now": { "message": "just now" },
-  "time_seconds_ago": { "message": "{{secs}}s ago" },
-
-  "model_picker_title": { "message": "Select Whisper Model" },
-  "model_picker_desc": { "message": "Choose model size before downloading. Larger = more accurate but slower." },
-  "model_picker_confirm": { "message": "Download & Activate" },
-  "model_tiny_desc": { "message": "Fastest, lowest accuracy" },
-  "model_base_desc": { "message": "Good balance for most use" },
-  "model_small_desc": { "message": "Better accuracy, moderate speed" },
-  "model_medium_desc": { "message": "High quality, slower" },
-  "model_turbo_desc": { "message": "Fast + high quality (recommended)" },
-  "model_large_desc": { "message": "Best accuracy, slowest" },
-  "label_engine_info": { "message": "Translation Engines" },
-  "tab_setup": { "message": "Setup" },
-  "tab_subtitles": { "message": "Subtitles" },
-  "label_engine": { "message": "Engine" },
-  "engine_auto": { "message": "Auto (Recommended)" },
-  "engine_gemini": { "message": "Gemini Nano" },
-  "engine_m2m100": { "message": "M2M100-418M" },
-  "btn_execute": { "message": "Run" }
+﻿{
+  "app_name": {
+    "message": "Local AI Subtitles Pro"
+  },
+  "app_description": {
+    "message": "100% offline AI-powered subtitle generator supporting 99+ languages. Privacy-first, no server dependency."
+  },
+  "sidepanel_title": {
+    "message": "AI Subtitles"
+  },
+  "btn_activate_ai": {
+    "message": "Activate Local AI"
+  },
+  "btn_ai_processing": {
+    "message": "● AI Processing"
+  },
+  "btn_export_srt": {
+    "message": "Export Bilingual SRT"
+  },
+  "btn_drop_video": {
+    "message": "Drop video file here"
+  },
+  "label_source_lang": {
+    "message": "Source Language"
+  },
+  "label_target_lang": {
+    "message": "Target Language"
+  },
+  "prompt_section_title": {
+    "message": "Transcription Context (Whisper hint)"
+  },
+  "prompt_preset_label": {
+    "message": "Preset:"
+  },
+  "prompt_preset_general": {
+    "message": "General"
+  },
+  "prompt_preset_tech": {
+    "message": "Tech / Programming"
+  },
+  "prompt_preset_medical": {
+    "message": "Medical / Healthcare"
+  },
+  "prompt_preset_legal": {
+    "message": "Legal / Court"
+  },
+  "prompt_preset_finance": {
+    "message": "Finance / Business"
+  },
+  "prompt_preset_education": {
+    "message": "Education / Lecture"
+  },
+  "prompt_preset_interview": {
+    "message": "Interview / Podcast"
+  },
+  "prompt_preset_gaming": {
+    "message": "Gaming / Entertainment"
+  },
+  "prompt_preset_custom": {
+    "message": "Custom"
+  },
+  "prompt_placeholder": {
+    "message": "e.g. Speaker: 张三, 李四. Topics: 量子计算, Transformer, LLM."
+  },
+  "prompt_hint": {
+    "message": "This text is fed to Whisper as initial context to bias recognition toward domain terminology, proper nouns, and speaking style."
+  },
+  "label_ui_lang": {
+    "message": "Interface Language"
+  },
+  "label_asr_model": {
+    "message": "ASR Model"
+  },
+  "label_settings": {
+    "message": "Settings"
+  },
+  "label_subtitles": {
+    "message": "Subtitles"
+  },
+  "label_export": {
+    "message": "Export"
+  },
+  "label_detected": {
+    "message": "Detected"
+  },
+  "label_processing": {
+    "message": "Processing"
+  },
+  "label_status": {
+    "message": "Status"
+  },
+  "label_no_subtitles": {
+    "message": "No subtitles yet"
+  },
+  "option_auto_detect": {
+    "message": "Auto Detect"
+  },
+  "option_tiny_model": {
+    "message": "Whisper Tiny (75MB, Faster)"
+  },
+  "option_base_model": {
+    "message": "Whisper Base (140MB, More Accurate)"
+  },
+  "option_small_model": {
+    "message": "Whisper Small (460MB, Better)"
+  },
+  "option_medium_model": {
+    "message": "Whisper Medium (1.5GB, High Quality)"
+  },
+  "option_large_v3_model": {
+    "message": "Whisper Large v3 (2.9GB, Best Quality)"
+  },
+  "option_large_v3_turbo_model": {
+    "message": "Whisper Turbo (1.6GB, Fast + Quality)"
+  },
+  "status_idle": {
+    "message": "Ready"
+  },
+  "status_downloading_model": {
+    "message": "Downloading model... {{progress}}%"
+  },
+  "status_loading_model": {
+    "message": "Loading model into memory..."
+  },
+  "status_model_ready": {
+    "message": "Model loaded. Ready to transcribe."
+  },
+  "status_model_failed": {
+    "message": "Failed to load ASR model. Please try again."
+  },
+  "status_transcribing": {
+    "message": "Transcribing..."
+  },
+  "status_translating": {
+    "message": "Translating..."
+  },
+  "status_exporting": {
+    "message": "Exporting SRT..."
+  },
+  "status_complete": {
+    "message": "Completed. {{count}} segments generated."
+  },
+  "status_error": {
+    "message": "Error: {{error}}"
+  },
+  "hint_drop_file": {
+    "message": "Drop a video file to start (up to 50GB)"
+  },
+  "hint_export_done": {
+    "message": "SRT file exported successfully"
+  },
+  "hint_no_file": {
+    "message": "No video file loaded"
+  },
+  "mode_local": {
+    "message": "Local File"
+  },
+  "mode_local_desc": {
+    "message": "Open a video or audio file from your device"
+  },
+  "btn_play": {
+    "message": "Play"
+  },
+  "btn_extract": {
+    "message": "Extract Subtitles"
+  },
+  "status_extracting_audio": {
+    "message": "Extracting audio..."
+  },
+  "status_extracting_progress": {
+    "message": "Extracting subtitles... {{progress}}%"
+  },
+  "status_transcribing_all": {
+    "message": "Transcribing: {{current}}/{{total}}"
+  },
+  "status_translating_all": {
+    "message": "Translating: {{current}}/{{total}}"
+  },
+  "status_extract_done": {
+    "message": "Done. {{count}} subtitles generated."
+  },
+  "btn_download_audio": {
+    "message": "Download Audio (WAV)"
+  },
+  "btn_download_srt": {
+    "message": "Download Subtitles (SRT)"
+  },
+  "btn_download_translated": {
+    "message": "Download Translated (SRT)"
+  },
+  "btn_extract_audio": {
+    "message": "Extract Audio"
+  },
+  "btn_transcribe": {
+    "message": "Transcribe"
+  },
+  "btn_translate": {
+    "message": "Translate"
+  },
+  "setting_section_general": {
+    "message": "General"
+  },
+  "setting_section_asr": {
+    "message": "Speech Recognition"
+  },
+  "setting_section_translate": {
+    "message": "Translation"
+  },
+  "setting_section_subtitle": {
+    "message": "Subtitle Display"
+  },
+  "setting_ui_language_desc": {
+    "message": "Language for extension UI"
+  },
+  "setting_source_lang_desc": {
+    "message": "Language spoken in the video (Auto Detect recommended)"
+  },
+  "setting_target_lang_desc": {
+    "message": "Language for translated subtitles"
+  },
+  "setting_asr_model_desc": {
+    "message": "Whisper model size. Larger = more accurate but slower"
+  },
+  "setting_subtitle_font_size": {
+    "message": "Font Size"
+  },
+  "setting_subtitle_color": {
+    "message": "Font Color"
+  },
+  "setting_subtitle_bg_opacity": {
+    "message": "Background Opacity"
+  },
+  "setting_export_bilingual": {
+    "message": "Bilingual SRT (Original + Translation)"
+  },
+  "setting_sliding_window": {
+    "message": "Context Window Size"
+  },
+  "setting_sliding_window_desc": {
+    "message": "Number of previous sentences sent to AI for context-aware translation"
+  },
+  "status_loading_whisper": {
+    "message": "[1/2] Downloading speech model (Whisper)... {{progress}}%"
+  },
+  "status_loading_translator": {
+    "message": "[2/2] Loading translation engine..."
+  },
+  "msg_translation_engine": {
+    "message": "Translation Engine"
+  },
+  "msg_engine_gemini": {
+    "message": "Chrome Built-in AI (Gemini Nano)"
+  },
+  "msg_engine_onnx": {
+    "message": "Local ONNX Model (NLLB-200)"
+  },
+  "msg_engine_unavailable": {
+    "message": "Translation engine unavailable. Please check settings."
+  },
+  "msg_gemini_unavailable": {
+    "message": "Gemini Nano not available. Downloading ONNX fallback..."
+  },
+  "msg_download_nllb": {
+    "message": "Downloading translation model ({{size}}MB)..."
+  },
+  "time_just_now": {
+    "message": "just now"
+  },
+  "time_seconds_ago": {
+    "message": "{{secs}}s ago"
+  },
+  "model_picker_title": {
+    "message": "Select Whisper Model"
+  },
+  "model_picker_desc": {
+    "message": "Choose model size before downloading. Larger = more accurate but slower."
+  },
+  "model_picker_confirm": {
+    "message": "Download & Activate"
+  },
+  "model_tiny_desc": {
+    "message": "Fastest, lowest accuracy"
+  },
+  "model_base_desc": {
+    "message": "Good balance for most use"
+  },
+  "model_small_desc": {
+    "message": "Better accuracy, moderate speed"
+  },
+  "model_medium_desc": {
+    "message": "High quality, slower"
+  },
+  "model_turbo_desc": {
+    "message": "Fast + high quality (recommended)"
+  },
+  "model_large_desc": {
+    "message": "Best accuracy, slowest"
+  },
+  "label_engine_info": {
+    "message": "Translation Engines"
+  },
+  "tab_setup": {
+    "message": "Setup"
+  },
+  "tab_subtitles": {
+    "message": "Subtitles"
+  },
+  "label_engine": {
+    "message": "Engine"
+  },
+  "engine_auto": {
+    "message": "Auto (Recommended)"
+  },
+  "engine_gemini": {
+    "message": "Gemini Nano"
+  },
+  "engine_m2m100": {
+    "message": "M2M100-418M"
+  },
+  "btn_execute": {
+    "message": "Run"
+  },
+  "btn_reactivate_ai": {
+    "message": "Re-activate"
+  }
 }

@@ -1,107 +1,239 @@
-{
-  "app_name": { "message": "Local AI Subtitles Pro" },
-  "app_description": { "message": "100% offline KI-gestützter Untertitelgenerator mit Unterstützung für 99+ Sprachen. Datenschutz first, kein Server erforderlich." },
-
-  "sidepanel_title": { "message": "KI-Untertitel" },
-
-  "btn_activate_ai": { "message": "Lokale KI aktivieren" },
-  "btn_ai_processing": { "message": "● KI-Verarbeitung" },
-  "btn_capture_audio": { "message": "Tab-Audio aufnehmen" },
-  "btn_stop_capture": { "message": "Aufnahme beenden" },
-  "btn_export_srt": { "message": "Zweisprachige SRT exportieren" },
-  "btn_drop_video": { "message": "Videodatei hier ablegen" },
-
-  "label_source_lang": { "message": "Quellsprache" },
-  "label_target_lang": { "message": "Zielsprache" },
-  "label_ui_lang": { "message": "Oberflächensprache" },
-  "label_asr_model": { "message": "ASR-Modell" },
-  "label_settings": { "message": "Einstellungen" },
-  "label_subtitles": { "message": "Untertitel" },
-  "label_export": { "message": "Exportieren" },
-  "label_detected": { "message": "Erkannt" },
-  "label_processing": { "message": "Verarbeitung" },
-  "label_status": { "message": "Status" },
-  "label_no_subtitles": { "message": "Noch keine Untertitel" },
-
-  "option_auto_detect": { "message": "Automatische Erkennung" },
-  "option_tiny_model": { "message": "Whisper Tiny (75 MB, Schnell)" },
-  "option_base_model": { "message": "Whisper Base (140 MB, Genau)" },
-  "option_small_model": { "message": "Whisper Small (460 MB, Besser)" },
-  "option_medium_model": { "message": "Whisper Medium (1.5 GB, Hochwertig)" },
-  "option_large_v3_model": { "message": "Whisper Large v3 (2.9 GB, Beste Qualität)" },
-  "option_large_v3_turbo_model": { "message": "Whisper Turbo (1.6 GB, Schnell+Qualität)" },
-
-  "status_idle": { "message": "Bereit" },
-  "status_downloading_model": { "message": "Modell wird heruntergeladen... {{progress}}%" },
-  "status_loading_model": { "message": "Modell wird in den Speicher geladen..." },
-  "status_model_ready": { "message": "Modell geladen. Bereit zur Transkription." },
-  "status_model_failed": { "message": "ASR-Modell konnte nicht geladen werden. Bitte versuchen Sie es erneut." },
-  "status_transcribing": { "message": "Transkribiere..." },
-  "status_translating": { "message": "Übersetze..." },
-  "status_capturing": { "message": "Tab-Audio wird aufgenommen..." },
-  "status_exporting": { "message": "SRT wird exportiert..." },
-  "status_generating_full": { "message": "Schnellmodus: Untertitel werden generiert..." },
-  "status_complete": { "message": "Abgeschlossen. {{count}} Segmente erstellt." },
-  "status_error": { "message": "Fehler: {{error}}" },
-
-  "hint_drop_file": { "message": "Videodatei ablegen (max. 50 GB)" },
-  "hint_drag_to_player": { "message": "Videodatei hier ablegen oder Seitenleiste verwenden" },
-  "hint_export_done": { "message": "SRT-Datei erfolgreich exportiert" },
-  "hint_no_file": { "message": "Keine Videodatei geladen" },
-  "mode_online": { "message": "Online-Wiedergabe" },
-  "mode_online_desc": { "message": "Click Chrome toolbar icon on the video tab first, then capture" },
-  "mode_local": { "message": "Lokale Datei" },
-  "mode_local_desc": { "message": "Öffnen Sie eine Video- oder Audiodatei von Ihrem Gerät" },
-
-  "error_capture_switch_tab": { "message": "Switch to the target tab, then close and reopen this panel by clicking the AI icon on that tab" },
-  "hint_capture_retry": { "message": "Make the video tab active → click AI icon → try Capture again" },
-  "error_capture_no_tab": { "message": "No active browser tab found" },
-  "error_capture_chrome_page": { "message": "Cannot capture Chrome internal pages" },
-  "status_requesting_capture": { "message": "Requesting audio stream..." },
-  "hint_capture_flow": { "message": "1. Go to video page  2. Click AI icon in toolbar  3. Click Start Capture" },
-
-  "tooltip_full_speed": { "message": "Schnelle stille Extraktion (10x-20x schneller)" },
-
-  "setting_section_general": { "message": "Allgemein" },
-  "setting_section_asr": { "message": "Spracherkennung" },
-  "setting_section_translate": { "message": "Übersetzung" },
-  "setting_section_subtitle": { "message": "Untertitelanzeige" },
-  "setting_ui_language_desc": { "message": "Sprache der Erweiterungsoberfläche" },
-  "setting_source_lang_desc": { "message": "In der Video gesprochene Sprache (automatische Erkennung empfohlen)" },
-  "setting_target_lang_desc": { "message": "Sprache der übersetzten Untertitel" },
-  "setting_asr_model_desc": { "message": "Whisper-Modellgröße. Größer = genauer aber langsamer" },
-  "setting_subtitle_font_size": { "message": "Schriftgröße" },
-  "setting_subtitle_color": { "message": "Schriftfarbe" },
-  "setting_subtitle_bg_opacity": { "message": "Hintergrunddeckkraft" },
-  "setting_export_bilingual": { "message": "Zweisprachige SRT (Original + Übersetzung)" },
-  "setting_sliding_window": { "message": "Kontextfenstergröße" },
-  "setting_sliding_window_desc": { "message": "Anzahl der vorherigen Sätze, die für kontextbewusste Übersetzung an die KI gesendet werden" },
-  "setting_capture_interval": { "message": "Aufnahmeintervall (Sekunden)" },
-
-  "msg_translation_engine": { "message": "Übersetzungsmaschine" },
-  "msg_engine_gemini": { "message": "Chrome integrierte KI (Gemini Nano)" },
-  "msg_engine_onnx": { "message": "Lokales ONNX-Modell (NLLB-200)" },
-  "msg_engine_unavailable": { "message": "Übersetzungsmaschine nicht verfügbar. Bitte Einstellungen prüfen." },
-  "msg_gemini_unavailable": { "message": "Gemini Nano nicht verfügbar. ONNX-Ersatzmodell wird heruntergeladen..." },
-  "msg_download_nllb": { "message": "Übersetzungsmodell wird heruntergeladen ({{size}} MB)..." },
-
-  "time_just_now": { "message": "gerade eben" },
-  "time_seconds_ago": { "message": "vor {{secs}}s" },
-
-  "model_picker_title": { "message": "Whisper-Modell auswählen" },
-  "model_picker_desc": { "message": "Wählen Sie die Modellgröße vor dem Download. Größer = genauer aber langsamer." },
-  "model_picker_confirm": { "message": "Herunterladen & aktivieren" },
-  "model_tiny_desc": { "message": "Schnellste, geringste Genauigkeit" },
-  "model_base_desc": { "message": "Gute Balance für die meisten Anwendungen" },
-  "model_small_desc": { "message": "Bessere Genauigkeit, moderate Geschwindigkeit" },
-  "model_medium_desc": { "message": "Hohe Qualität, langsamer" },
-  "model_turbo_desc": { "message": "Schnell + hochwertig (empfohlen)" },
-  "model_large_desc": { "message": "Beste Genauigkeit, langsamste" },
-  "tab_setup": { "message": "Einrichtung" },
-  "tab_subtitles": { "message": "Untertitel" },
-  "label_engine": { "message": "Engine" },
-  "engine_auto": { "message": "Auto" },
-  "engine_gemini": { "message": "Gemini Nano" },
-  "engine_m2m100": { "message": "M2M100-418M" },
-  "btn_execute": { "message": "Ausführen" }
+﻿{
+  "app_name": {
+    "message": "Local AI Subtitles Pro"
+  },
+  "app_description": {
+    "message": "100% offline KI-gestützter Untertitelgenerator mit Unterstützung für 99+ Sprachen. Datenschutz first, kein Server erforderlich."
+  },
+  "sidepanel_title": {
+    "message": "KI-Untertitel"
+  },
+  "btn_activate_ai": {
+    "message": "Lokale KI aktivieren"
+  },
+  "btn_ai_processing": {
+    "message": "● KI-Verarbeitung"
+  },
+  "btn_export_srt": {
+    "message": "Zweisprachige SRT exportieren"
+  },
+  "btn_drop_video": {
+    "message": "Videodatei hier ablegen"
+  },
+  "label_source_lang": {
+    "message": "Quellsprache"
+  },
+  "label_target_lang": {
+    "message": "Zielsprache"
+  },
+  "label_ui_lang": {
+    "message": "Oberflächensprache"
+  },
+  "label_asr_model": {
+    "message": "ASR-Modell"
+  },
+  "label_settings": {
+    "message": "Einstellungen"
+  },
+  "label_subtitles": {
+    "message": "Untertitel"
+  },
+  "label_export": {
+    "message": "Exportieren"
+  },
+  "label_detected": {
+    "message": "Erkannt"
+  },
+  "label_processing": {
+    "message": "Verarbeitung"
+  },
+  "label_status": {
+    "message": "Status"
+  },
+  "label_no_subtitles": {
+    "message": "Noch keine Untertitel"
+  },
+  "option_auto_detect": {
+    "message": "Automatische Erkennung"
+  },
+  "option_tiny_model": {
+    "message": "Whisper Tiny (75 MB, Schnell)"
+  },
+  "option_base_model": {
+    "message": "Whisper Base (140 MB, Genau)"
+  },
+  "option_small_model": {
+    "message": "Whisper Small (460 MB, Besser)"
+  },
+  "option_medium_model": {
+    "message": "Whisper Medium (1.5 GB, Hochwertig)"
+  },
+  "option_large_v3_model": {
+    "message": "Whisper Large v3 (2.9 GB, Beste Qualität)"
+  },
+  "option_large_v3_turbo_model": {
+    "message": "Whisper Turbo (1.6 GB, Schnell+Qualität)"
+  },
+  "status_idle": {
+    "message": "Bereit"
+  },
+  "status_downloading_model": {
+    "message": "Modell wird heruntergeladen... {{progress}}%"
+  },
+  "status_loading_model": {
+    "message": "Modell wird in den Speicher geladen..."
+  },
+  "status_model_ready": {
+    "message": "Modell geladen. Bereit zur Transkription."
+  },
+  "status_model_failed": {
+    "message": "ASR-Modell konnte nicht geladen werden. Bitte versuchen Sie es erneut."
+  },
+  "status_transcribing": {
+    "message": "Transkribiere..."
+  },
+  "status_translating": {
+    "message": "Übersetze..."
+  },
+  "status_exporting": {
+    "message": "SRT wird exportiert..."
+  },
+  "status_complete": {
+    "message": "Abgeschlossen. {{count}} Segmente erstellt."
+  },
+  "status_error": {
+    "message": "Fehler: {{error}}"
+  },
+  "hint_drop_file": {
+    "message": "Videodatei ablegen (max. 50 GB)"
+  },
+  "hint_export_done": {
+    "message": "SRT-Datei erfolgreich exportiert"
+  },
+  "hint_no_file": {
+    "message": "Keine Videodatei geladen"
+  },
+  "mode_local": {
+    "message": "Lokale Datei"
+  },
+  "mode_local_desc": {
+    "message": "Öffnen Sie eine Video- oder Audiodatei von Ihrem Gerät"
+  },
+  "setting_section_general": {
+    "message": "Allgemein"
+  },
+  "setting_section_asr": {
+    "message": "Spracherkennung"
+  },
+  "setting_section_translate": {
+    "message": "Übersetzung"
+  },
+  "setting_section_subtitle": {
+    "message": "Untertitelanzeige"
+  },
+  "setting_ui_language_desc": {
+    "message": "Sprache der Erweiterungsoberfläche"
+  },
+  "setting_source_lang_desc": {
+    "message": "In der Video gesprochene Sprache (automatische Erkennung empfohlen)"
+  },
+  "setting_target_lang_desc": {
+    "message": "Sprache der übersetzten Untertitel"
+  },
+  "setting_asr_model_desc": {
+    "message": "Whisper-Modellgröße. Größer = genauer aber langsamer"
+  },
+  "setting_subtitle_font_size": {
+    "message": "Schriftgröße"
+  },
+  "setting_subtitle_color": {
+    "message": "Schriftfarbe"
+  },
+  "setting_subtitle_bg_opacity": {
+    "message": "Hintergrunddeckkraft"
+  },
+  "setting_export_bilingual": {
+    "message": "Zweisprachige SRT (Original + Übersetzung)"
+  },
+  "setting_sliding_window": {
+    "message": "Kontextfenstergröße"
+  },
+  "setting_sliding_window_desc": {
+    "message": "Anzahl der vorherigen Sätze, die für kontextbewusste Übersetzung an die KI gesendet werden"
+  },
+  "msg_translation_engine": {
+    "message": "Übersetzungsmaschine"
+  },
+  "msg_engine_gemini": {
+    "message": "Chrome integrierte KI (Gemini Nano)"
+  },
+  "msg_engine_onnx": {
+    "message": "Lokales ONNX-Modell (NLLB-200)"
+  },
+  "msg_engine_unavailable": {
+    "message": "Übersetzungsmaschine nicht verfügbar. Bitte Einstellungen prüfen."
+  },
+  "msg_gemini_unavailable": {
+    "message": "Gemini Nano nicht verfügbar. ONNX-Ersatzmodell wird heruntergeladen..."
+  },
+  "msg_download_nllb": {
+    "message": "Übersetzungsmodell wird heruntergeladen ({{size}} MB)..."
+  },
+  "time_just_now": {
+    "message": "gerade eben"
+  },
+  "time_seconds_ago": {
+    "message": "vor {{secs}}s"
+  },
+  "model_picker_title": {
+    "message": "Whisper-Modell auswählen"
+  },
+  "model_picker_desc": {
+    "message": "Wählen Sie die Modellgröße vor dem Download. Größer = genauer aber langsamer."
+  },
+  "model_picker_confirm": {
+    "message": "Herunterladen & aktivieren"
+  },
+  "model_tiny_desc": {
+    "message": "Schnellste, geringste Genauigkeit"
+  },
+  "model_base_desc": {
+    "message": "Gute Balance für die meisten Anwendungen"
+  },
+  "model_small_desc": {
+    "message": "Bessere Genauigkeit, moderate Geschwindigkeit"
+  },
+  "model_medium_desc": {
+    "message": "Hohe Qualität, langsamer"
+  },
+  "model_turbo_desc": {
+    "message": "Schnell + hochwertig (empfohlen)"
+  },
+  "model_large_desc": {
+    "message": "Beste Genauigkeit, langsamste"
+  },
+  "tab_setup": {
+    "message": "Einrichtung"
+  },
+  "tab_subtitles": {
+    "message": "Untertitel"
+  },
+  "label_engine": {
+    "message": "Engine"
+  },
+  "engine_auto": {
+    "message": "Auto"
+  },
+  "engine_gemini": {
+    "message": "Gemini Nano"
+  },
+  "engine_m2m100": {
+    "message": "M2M100-418M"
+  },
+  "btn_execute": {
+    "message": "Ausführen"
+  },
+  "btn_reactivate_ai": {
+    "message": "Neu aktivieren"
+  }
 }

@@ -27,7 +27,6 @@ function copyDir(src, dest, filter = () => true) {
 
 const staticDirs = [
   'sidepanel',
-  'player',
   'icons',
   '_locales',
 ]
@@ -139,8 +138,6 @@ await bundle('service-worker.js', 'service-worker.js')
 
 await bundle('sidepanel/script.js', 'sidepanel/script.js')
 
-await bundle('player/script.js', 'player/script.js')
-
 await bundle('modules/whisper-worker.js', 'modules/whisper-worker.js')
 
 await bundle('modules/translate-worker.js', 'modules/translate-worker.js')
@@ -163,7 +160,7 @@ for (const m of manifestContent.matchAll(/__MSG_(\w+)__/g)) {
 }
 
 // HTML uses data-i18n / data-i18n-title attributes, resolved by JS at runtime
-for (const file of [join(DIST, 'sidepanel', 'index.html'), join(DIST, 'player', 'index.html')]) {
+for (const file of [join(DIST, 'sidepanel', 'index.html')]) {
   const content = readFileSync(file, 'utf-8')
   for (const m of content.matchAll(/data-i18n(?:-title)?="(\w+)"/g)) {
     if (!msgKeys.has(m[1])) {

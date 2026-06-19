@@ -19,9 +19,6 @@
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
 
-  --card-online: #1e2438;
-  --card-online-border: #4a7dff;
-  --card-online-accent: rgba(74, 125, 255, 0.15);
   --card-local: #1e2e24;
   --card-local-border: #34d399;
   --card-local-accent: rgba(52, 211, 153, 0.15);
@@ -309,16 +306,6 @@ select:focus { border-color: var(--accent); }
   overflow: hidden;
 }
 
-#modeOnline {
-  background: var(--card-online);
-  border: 1px solid rgba(74, 125, 255, 0.2);
-}
-
-#modeOnline.active {
-  border-color: var(--card-online-border);
-  box-shadow: 0 0 16px rgba(74, 125, 255, 0.15);
-}
-
 #modeLocal {
   background: var(--card-local);
   border: 1px solid rgba(52, 211, 153, 0.2);
@@ -345,7 +332,6 @@ select:focus { border-color: var(--accent); }
   font-size: 13px; font-weight: 600;
 }
 
-#modeOnline .mode-label { color: #7aa2ff; }
 #modeLocal .mode-label { color: #6ee7b7; }
 
 .mode-desc {
@@ -371,26 +357,6 @@ select:focus { border-color: var(--accent); }
 }
 
 .mode-action-btn .btn-icon { font-size: 14px; }
-
-#modeOnline .mode-action-btn {
-  background: rgba(74, 125, 255, 0.1);
-  color: var(--text-primary);
-}
-
-#modeOnline .mode-action-btn:hover:not(:disabled) {
-  background: rgba(74, 125, 255, 0.25);
-  border-color: var(--card-online-border);
-}
-
-#modeOnline .mode-action-btn.capturing {
-  background: rgba(248, 113, 113, 0.15);
-  border-color: var(--error);
-  color: var(--error);
-}
-
-#modeOnline .mode-action-btn.capturing:hover:not(:disabled) {
-  background: rgba(248, 113, 113, 0.3);
-}
 
 .mode-action-btn:disabled {
   opacity: 0.4; cursor: not-allowed;
@@ -419,7 +385,6 @@ select:focus { border-color: var(--accent); }
   font-size: 11px;
 }
 
-#modeOnline .mode-info { background: rgba(74, 125, 255, 0.08); color: #7aa2ff; }
 #modeLocal .mode-info { background: rgba(52, 211, 153, 0.08); color: #6ee7b7; }
 
 .mode-info-dot {
@@ -580,10 +545,6 @@ select:focus { border-color: var(--accent); }
   font-size: 10px;
   color: var(--text-dim);
   line-height: 1.4;
-}
-
-#modeOnline.active .mode-hint {
-  display: none;
 }
 
 /* ── Drop Zone ── */
