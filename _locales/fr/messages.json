@@ -271,5 +271,26 @@
   },
   "prompt_add": {
     "message": "Ajouter"
+  },
+  "btn_extract_audio": {
+    "message": "Extract Audio"
+  },
+  "btn_transcribe": {
+    "message": "Transcribe"
+  },
+  "btn_translate": {
+    "message": "Translate"
+  },
+  "prompt_section_title": {
+    "message": "Transcription Context (Whisper hint)"
+  },
+  "prompt_preset_label": {
+    "message": "Preset:"
+  },
+  "prompt_placeholder": {
+    "message": "e.g. Speaker: 张三, 李四. Topics: 量子计算, Transformer, LLM."
+  },
+  "prompt_hint": {
+    "message": "This text is fed to Whisper as initial context to bias recognition toward domain terminology, proper nouns, and speaking style."
   }
 }
