@@ -249,38 +249,37 @@ class WhisperWorkerEngine {
     const count = this._workerCount(model);
     console.log(`[Whisper] Starting ${count} workers for model ${model}`);
 
-    // Track per-worker progress for smooth aggregated reporting
-    const workerProgress = new Array(count).fill(null).map(() => ({ pct: 0, done: false }));
+    // Set up worker progress bars
+    onProgress(-1, 'init', count);
+
+    const makeCb = (idx) => (pct, stage) => {
+      onProgress(pct, stage, idx);
+    };
 
     try {
-      // First worker: load model (downloads + caches)
-      const firstCb = (pct, stage) => {
-        workerProgress[0].pct = pct;
-        if (stage === 'ready') workerProgress[0].done = true;
-        // First worker's progress = overall progress
-        onProgress(pct, stage);
-      };
-      await this._initWorker(model, firstCb);
-      workerProgress[0].pct = 100;
-      workerProgress[0].done = true;
+      // Worker 0 downloads model (sequential)
+      await this._initWorker(model, makeCb(0));
 
-      // Remaining workers: load from cache in parallel
-      const restPromises = [];
-      for (let i = 1; i < count; i++) {
-        const idx = i;
-        restPromises.push(this._initWorker(model, (pct, stage) => {
-          workerProgress[idx].pct = pct;
-          if (stage === 'ready') workerProgress[idx].done = true;
-          const totalPct = Math.round(workerProgress.reduce((s, w) => s + w.pct, 0) / count);
-          onProgress(totalPct, stage);
-        }));
-      }
-      if (restPromises.length > 0) {
+      // Workers 1-3 load from cache (parallel)
+      if (count > 1) {
+        const restPromises = [];
+        for (let i = 1; i < count; i++) {
+          restPromises.push(this._initWorker(model, makeCb(i)));
+        }
         await Promise.all(restPromises);
       }
 
+      // Mark as cached in IndexedDB
+      const cacheKey = `whisper_${model}`;
+      await Cache.setModelConfig(cacheKey, {
+        version: MODEL_VERSION[model],
+        modelType: model,
+        cachedAt: Date.now(),
+      });
+
       this._ready = true;
       this._usingWorker = true;
+      onProgress(100, 'ready');
       console.log(`[Whisper] ${count} workers ready`);
       return;
     } catch (err) {
@@ -302,6 +301,7 @@ class WhisperWorkerEngine {
     this._workers.push(worker);
 
     const fileProgress = new Map();
+    let lastReported = -1; // 单调递增保护，初始化为 -1 允许 0% 通过
 
     // Handle worker crash: reject all pending messages for this worker
     worker.onerror = (err) => {
@@ -341,7 +341,12 @@ class WhisperWorkerEngine {
           const isCurrentFileReady = current.loaded >= current.total;
           const completedWeight = isCurrentFileReady ? completedCount : (completedCount + currentPct);
           const pct = Math.min(100, Math.round((completedWeight / totalFiles) * 100));
-          onProgress(pct, 'downloading');
+          
+          // 单调递增：只允许进度增加
+          if (pct > lastReported) {
+            lastReported = pct;
+            onProgress(pct, 'downloading');
+          }
         } else if (payload.status === 'ready') {
           onProgress(100, 'ready');
         }

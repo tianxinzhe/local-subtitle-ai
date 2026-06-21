@@ -1,12 +1,13 @@
 import { loadConfig, saveConfig, get } from '../modules/config.js';
 import { i18n } from '../modules/i18n.js';
-import { whisper } from '../modules/whisper.js';
+import { whisper, MODEL_REPO, MODEL_VERSION } from '../modules/whisper.js';
 import { translator, Translator } from '../modules/translator.js';
 import { audioProcessor } from '../modules/audio-processor.js';
 import { sentenceMerger } from '../modules/sentence-merger.js';
 import { slidingWindow } from '../modules/sliding-window.js';
 import { srtExporter } from '../modules/srt-exporter.js';
 import { getAllLanguages, getLanguage, getLanguageDisplayName, isRtl } from '../modules/languages.js';
+import * as Cache from '../modules/indexeddb-cache.js';
 
 let currentFile = null;
 let currentFileType = null; // 'video', 'audio', 'subtitle'
@@ -98,7 +99,6 @@ function resetPipelineSteps() {
     p.textContent = '';
     p.className = 'si-progress';
     $('dl' + s).classList.add('hidden');
-    $('si' + s).classList.remove('hidden');
   }
 }
 
@@ -110,17 +110,19 @@ async function executePipeline() {
   $('ppWrap').classList.remove('hidden');
   $('ppFill').style.width = '0%';
 
-  for (const s of ['Extract', 'Transcribe', 'Translate']) {
-    const p = $('prog' + s);
-    p.textContent = '⏳';
-    p.className = 'si-progress';
-    $('dl' + s).classList.add('hidden');
-    $('si' + s).classList.remove('hidden');
-  }
-
   const doExtract = $('chkExtract').checked && !$('chkExtract').disabled;
   const doTranscribe = $('chkTranscribe').checked && !$('chkTranscribe').disabled;
   const doTranslate = $('chkTranslate').checked && !$('chkTranslate').disabled;
+
+  for (const s of ['Extract', 'Transcribe', 'Translate']) {
+    const show = (s === 'Extract' && doExtract) || (s === 'Transcribe' && doTranscribe) || (s === 'Translate' && doTranslate);
+    $('si' + s).classList.toggle('hidden', !show);
+    if (show) {
+      $('prog' + s).textContent = '⏳';
+      $('prog' + s).className = 'si-progress';
+      $('dl' + s).classList.add('hidden');
+    }
+  }
 
   try {
     if (doExtract && currentFileType === 'video' && !audioData) {
@@ -218,26 +220,235 @@ async function loadSettings() {
   $('sourceLang').value = config.sourceLanguage || 'auto';
   $('targetLang').value = config.targetLanguage || 'zh';
 
-  $('settingUiLang').value = config.uiLanguage || 'en';
   $('asrModelSelect').value = config.asrModel || 'base';
   $('engineSelect').value = config.translationEngine || 'auto';
 
-  // Whisper prompt (UI-only state for now; not yet wired to worker)
-  if (config.whisperPromptPreset) {
-    $('promptPreset').value = config.whisperPromptPreset;
-  }
-  if (config.whisperPrompt) {
-    $('promptCustom').value = config.whisperPrompt;
-  } else if (config.whisperPromptPreset && config.whisperPromptPreset !== 'custom' && config.whisperPromptPreset !== 'general') {
-    $('promptCustom').value = PROMPT_PRESETS[config.whisperPromptPreset] || '';
-  }
+  // Load saved prompts into selector
+  await loadPromptDropdown($('promptPreset'), config.activePromptId);
 
   updateLangToggle();
+  loadModelCacheList();
+  loadPromptManager();
+}
+
+const MODEL_LABELS = {
+  tiny: 'option_tiny_model',
+  base: 'option_base_model',
+  small: 'option_small_model',
+  medium: 'option_medium_model',
+  'large-v3': 'option_large_v3_model',
+  'm2m100': 'model_cache_m2m100',
+};
+
+function formatMB(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function getCacheSizeForModel(modelKey) {
+  let bytes = 0;
+  try {
+    const cacheNames = await caches.keys();
+    const repoId = modelKey === 'm2m100' ? 'Xenova/m2m100_418M' : MODEL_REPO[modelKey];
+    if (!repoId) return 0;
+    for (const name of cacheNames) {
+      try {
+        const cache = await caches.open(name);
+        for (const req of await cache.keys()) {
+          const url = req.url || '';
+          if (url.includes(repoId)) {
+            const resp = await cache.match(url);
+            if (resp) {
+              const blob = await resp.clone().blob();
+              bytes += blob.size;
+            }
+          }
+        }
+      } catch {}
+    }
+  } catch {}
+  return bytes;
+}
+
+async function loadModelCacheList() {
+  const list = $('modelCacheList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  const whisperKeys = Object.keys(MODEL_REPO);
+  const rows = [];
+
+  for (const key of whisperKeys) {
+    const meta = await Cache.getModelConfig(`whisper_${key}`);
+    const cached = !!(meta && meta.version === MODEL_VERSION[key]);
+    const size = cached ? await getCacheSizeForModel(key) : 0;
+    rows.push({ key, labelKey: MODEL_LABELS[key], cached, size, cachedAt: meta?.cachedAt });
+  }
+
+  // M2M100
+  const m2mMeta = await Cache.getModelConfig('m2m100_418M');
+  const m2mCached = !!m2mMeta;
+  const m2mSize = m2mCached ? await getCacheSizeForModel('m2m100') : 0;
+  rows.push({ key: 'm2m100', labelKey: MODEL_LABELS.m2m100, cached: m2mCached, size: m2mSize, cachedAt: m2mMeta?.cachedAt });
+
+  let total = 0;
+  for (const r of rows) {
+    total += r.size;
+    const row = document.createElement('div');
+    row.className = 'cache-row' + (r.cached ? ' cached' : '');
+    const label = i18n.t(r.labelKey) || r.key;
+    const status = r.cached
+      ? `<span class="cache-status cached" data-i18n="model_cache_status_cached">${i18n.t('model_cache_status_cached')}</span>`
+      : `<span class="cache-status not-cached" data-i18n="model_cache_status_not_cached">${i18n.t('model_cache_status_not_cached')}</span>`;
+    const sizeText = r.cached ? formatMB(r.size) : '';
+    const dateText = r.cached && r.cachedAt
+      ? new Date(r.cachedAt).toLocaleDateString()
+      : '';
+    row.innerHTML = `
+      <div class="cache-row-name">${label}</div>
+      <div class="cache-row-meta">${status}${sizeText ? ` · <span class="cache-size">${sizeText}</span>` : ''}${dateText ? ` · <span class="cache-date">${dateText}</span>` : ''}</div>
+    `;
+    list.appendChild(row);
+  }
+
+  $('modelCacheTotal').textContent = i18n.t('model_cache_total', { size: formatMB(total) });
+}
+
+async function clearModelCache() {
+  if (!confirm(i18n.t('model_cache_clear_confirm'))) return;
+
+  // Unload active models first
+  try { await whisper.unload(); } catch {}
+  try { await translator.unload(); } catch {}
+
+  // Clear IndexedDB model stores
+  try { await Cache.clearModelCache(); } catch (e) { console.warn('IDB clear:', e); }
+
+  // Remove all model files from CacheStorage
+  try {
+    const names = await caches.keys();
+    await Promise.all(names.map(async (name) => {
+      try {
+        const cache = await caches.open(name);
+        const reqs = await cache.keys();
+        await Promise.all(reqs.map(r => cache.delete(r)));
+      } catch {}
+    }));
+  } catch (e) { console.warn('CacheStorage clear:', e); }
+
+  showToast(i18n.t('model_cache_cleared'));
+  isAiReady = false;
+  setModeCardsEnabled(false);
+  $('activateBtn').classList.remove('hidden');
+  $('reactivateBtn').classList.add('hidden');
+  await loadModelCacheList();
 }
 
 function setModeCardsEnabled(enabled) {
   const cards = document.querySelectorAll('.mode-card');
   cards.forEach(c => c.classList.toggle('disabled', !enabled));
+}
+
+// ── Prompt Management ──
+const PROMPT_STORAGE_KEY = 'whisperPrompts';
+
+async function loadPrompts() {
+  const result = await chrome.storage.local.get(PROMPT_STORAGE_KEY);
+  return result[PROMPT_STORAGE_KEY] || [];
+}
+
+async function savePrompts(prompts) {
+  await chrome.storage.local.set({ [PROMPT_STORAGE_KEY]: prompts });
+}
+
+async function setActivePrompt(id) {
+  await saveConfig({ activePromptId: id });
+  // Update the text shown in workbench
+  const prompts = await loadPrompts();
+  const prompt = prompts.find(p => p.id === id);
+  $('promptCustom').value = prompt ? prompt.text : '';
+}
+
+async function loadPromptDropdown(selectEl, activeId) {
+  const prompts = await loadPrompts();
+  selectEl.innerHTML = '<option value="">' + i18n.t('prompt_none') + '</option>';
+  for (const p of prompts) {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.name;
+    if (p.id === activeId) opt.selected = true;
+    selectEl.appendChild(opt);
+  }
+  // Show the selected prompt text
+  const active = prompts.find(p => p.id === activeId);
+  $('promptCustom').value = active ? active.text : '';
+}
+
+async function loadPromptManager() {
+  const list = $('promptList');
+  if (!list) return;
+  list.innerHTML = '';
+  const prompts = await loadPrompts();
+  for (const p of prompts) {
+    const item = document.createElement('div');
+    item.className = 'prompt-item';
+    item.innerHTML = `
+      <div class="prompt-item-header">
+        <span class="prompt-item-name">${escapeHtml(p.name)}</span>
+        <div class="prompt-item-actions">
+          <button class="del-btn" data-id="${p.id}">${i18n.t('model_cache_clear_confirm').includes('Delete') ? 'Delete' : '删除'}</button>
+        </div>
+      </div>
+      <div class="prompt-item-text">${escapeHtml(p.text)}</div>
+    `;
+    item.querySelector('.del-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await deletePrompt(p.id);
+    });
+    item.addEventListener('click', () => {
+      item.classList.toggle('expanded');
+      // Load into workbench editor for quick editing
+      const select = $('promptPreset');
+      for (const opt of select.options) {
+        if (opt.value === p.id) opt.selected = true;
+      }
+      $('promptCustom').value = p.text;
+      setActivePrompt(p.id);
+    });
+    list.appendChild(item);
+  }
+}
+
+async function addPrompt(name, text) {
+  if (!name.trim() || !text.trim()) return;
+  const prompts = await loadPrompts();
+  const id = 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  prompts.push({ id, name: name.trim(), text: text.trim() });
+  await savePrompts(prompts);
+  await loadPromptManager();
+  await loadPromptDropdown($('promptPreset'), id);
+  await setActivePrompt(id);
+  $('promptNewName').value = '';
+  $('promptNewText').value = '';
+}
+
+async function deletePrompt(id) {
+  let prompts = await loadPrompts();
+  prompts = prompts.filter(p => p.id !== id);
+  await savePrompts(prompts);
+  await loadPromptManager();
+  const config = await loadConfig();
+  if (config.activePromptId === id) {
+    await setActivePrompt('');
+  }
+  await loadPromptDropdown($('promptPreset'), config.activePromptId === id ? '' : config.activePromptId);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 function setupEventListeners() {
@@ -246,7 +457,6 @@ function setupEventListeners() {
 
   $('langToggle').addEventListener('change', async (e) => {
     const lang = e.target.value;
-    $('settingUiLang').value = lang;
     await i18n.setLanguage(lang);
     localizeHtml();
     await populateLanguageDropdowns();
@@ -286,7 +496,7 @@ function setupEventListeners() {
     await saveConfig({ targetLanguage: $('targetLang').value });
   });
 
-  // Whisper prompt (initial context) — UI only, not wired to worker yet
+  // Whisper prompt (select from saved)
   $('promptToggle').addEventListener('click', () => {
     const body = $('promptBody');
     const section = $('promptToggle').parentElement;
@@ -294,18 +504,24 @@ function setupEventListeners() {
     section.classList.toggle('open', !body.classList.contains('hidden'));
   });
 
-  $('promptPreset').addEventListener('change', () => {
-    const val = $('promptPreset').value;
-    if (val !== 'custom') {
-      $('promptCustom').value = PROMPT_PRESETS[val] || '';
-    }
+  $('promptPreset').addEventListener('change', async () => {
+    const id = $('promptPreset').value;
+    const prompts = await loadPrompts();
+    const prompt = prompts.find(p => p.id === id);
+    $('promptCustom').value = prompt ? prompt.text : '';
+    await setActivePrompt(id);
   });
 
-  $('promptCustom').addEventListener('input', () => {
-    saveConfig({ whisperPrompt: $('promptCustom').value, whisperPromptPreset: $('promptPreset').value });
-  });
-  $('promptPreset').addEventListener('change', () => {
-    saveConfig({ whisperPrompt: $('promptCustom').value, whisperPromptPreset: $('promptPreset').value });
+  $('promptCustom').addEventListener('input', async () => {
+    const id = $('promptPreset').value;
+    if (id) {
+      const prompts = await loadPrompts();
+      const idx = prompts.findIndex(p => p.id === id);
+      if (idx >= 0) {
+        prompts[idx].text = $('promptCustom').value;
+        await savePrompts(prompts);
+      }
+    }
   });
 
   $('exportBtn').addEventListener('click', exportSrt);
@@ -329,12 +545,28 @@ function setupEventListeners() {
     await saveConfig({ translationEngine: $('engineSelect').value });
   });
 
-  $('settingUiLang').addEventListener('change', async () => {
-    const lang = $('settingUiLang').value;
-    await i18n.setLanguage(lang);
-    localizeHtml();
-    await populateLanguageDropdowns();
-    await loadSettings();
+  $('clearModelCacheBtn').addEventListener('click', clearModelCache);
+
+  // Settings section toggles
+  document.querySelectorAll('.settings-toggle').forEach(el => {
+    const body = document.getElementById(el.dataset.target);
+    const section = el.parentElement;
+    // Start expanded
+    section.classList.add('open');
+    body.classList.remove('hidden');
+    el.addEventListener('click', () => {
+      body.classList.toggle('hidden');
+      section.classList.toggle('open', !body.classList.contains('hidden'));
+    });
+  });
+
+  $('promptAddBtn').addEventListener('click', async () => {
+    const name = $('promptNewName').value.trim();
+    const text = $('promptNewText').value.trim();
+    if (name && text) await addPrompt(name, text);
+  });
+  $('promptNewName').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('promptAddBtn').click();
   });
 
   // Pipeline execute + download buttons
@@ -382,8 +614,8 @@ async function doActivate(model) {
 
   const btn = $('activateBtn');
   const progressContainer = $('progressContainer');
-  const progressFill = $('progressFill');
   const progressLabel = $('progressLabel');
+  const workerList = $('workerProgressList');
   const whisperStatusEl = $('whisperStatus');
   const translatorStatusEl = $('translatorStatus');
 
@@ -395,16 +627,40 @@ async function doActivate(model) {
   // Step 1: Load Whisper
   whisperStatusEl.textContent = '...';
   whisperStatusEl.className = 'sel-status sel-loading';
-  progressFill.style.width = '0%';
-  progressLabel.textContent = 'Whisper: 0%';
+  progressLabel.textContent = 'Whisper: loading...';
 
   try {
     await whisper.load({
       model,
-      onProgress: (pct, stage) => {
-        progressFill.style.width = pct + '%';
-        progressLabel.textContent = `Whisper: ${pct}%`;
-        whisperStatusEl.textContent = `${pct}%`;
+      onProgress: (pct, stage, workerIdx) => {
+        // Init call: create worker progress bars
+        if (pct === -1 && stage === 'init' && typeof workerIdx === 'number') {
+          workerList.innerHTML = '';
+          for (let i = 0; i < workerIdx; i++) {
+            const row = document.createElement('div');
+            row.className = 'worker-progress-row';
+            row.innerHTML = `
+              <span class="worker-label">W${i + 1}</span>
+              <div class="worker-bar-wrap"><div class="worker-bar-fill" data-w="${i}"></div></div>
+            `;
+            workerList.appendChild(row);
+          }
+          return;
+        }
+        if (workerIdx !== undefined && workerIdx >= 0) {
+          const bar = workerList.querySelector(`.worker-bar-fill[data-w="${workerIdx}"]`);
+          if (bar) {
+            bar.style.width = pct + '%';
+            bar.classList.toggle('done', pct >= 100);
+          }
+        }
+        // Compute overall average for status label
+        const fills = workerList.querySelectorAll('.worker-bar-fill');
+        let sum = 0;
+        for (const f of fills) sum += parseFloat(f.style.width) || 0;
+        const avg = fills.length > 0 ? Math.round(sum / fills.length) : pct;
+        progressLabel.textContent = `Whisper: ${avg}%`;
+        whisperStatusEl.textContent = `${avg}%`;
       },
     });
     whisperOk = true;
@@ -416,20 +672,25 @@ async function doActivate(model) {
     console.error('[SidePanel] Whisper load failed:', err);
   }
 
+  // Clear worker bars before translator phase
+  workerList.innerHTML = '';
+
   // Step 2: Load Translator (even if whisper failed)
   translatorStatusEl.textContent = '...';
   translatorStatusEl.className = 'sel-status sel-loading';
-  progressFill.style.width = '0%';
   progressLabel.textContent = 'Translator: 0%';
 
   let finalStage = '';
   const configForEngine = await loadConfig();
   const enginePref = configForEngine.translationEngine || 'auto';
   try {
+    // Show single progress bar for translator
+    workerList.innerHTML = '<div class="worker-progress-row"><div class="worker-bar-wrap" style="flex:1;margin-left:0"><div class="worker-bar-fill" id="tlFill"></div></div></div>';
     await translator.init({
       enginePreference: enginePref,
       onProgress: (pct, stage) => {
-        progressFill.style.width = pct + '%';
+        const tlFill = $('tlFill');
+        if (tlFill) tlFill.style.width = pct + '%';
         // Show clean stage text without percentage (progress bar shows it visually)
         const displayStage = stage || `Translator: ${pct}%`;
         progressLabel.textContent = displayStage;
@@ -469,6 +730,7 @@ async function doActivate(model) {
     $('reactivateBtn').classList.remove('hidden');
     $('reactivateBtn').disabled = false;
     $('reactivateBtn').classList.remove('processing');
+    loadModelCacheList();
   } else {
     progressLabel.textContent = 'Whisper failed — extraction disabled';
   }
@@ -629,9 +891,9 @@ async function transcribeAudio() {
 
   const config = await loadConfig();
   const sourceLang = config.sourceLanguage || 'auto';
-  const whisperPrompt = (config.whisperPromptPreset && config.whisperPromptPreset !== 'general' && config.whisperPromptPreset !== 'custom')
-    ? PROMPT_PRESETS[config.whisperPromptPreset] || ''
-    : (config.whisperPrompt || '');
+  const prompts = await loadPrompts();
+  const activePrompt = config.activePromptId ? prompts.find(p => p.id === config.activePromptId) : null;
+  const whisperPrompt = activePrompt ? activePrompt.text : '';
 
   try {
     const segments = await whisper.transcribeAll(audioData, {

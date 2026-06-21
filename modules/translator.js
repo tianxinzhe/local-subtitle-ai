@@ -1,7 +1,8 @@
 import { get, set } from './config.js';
+import * as Cache from './indexeddb-cache.js';
 import { env } from '@huggingface/transformers';
 
-const HF_MIRROR = 'https://hf-mirror.com';
+const HUB_HOST = 'https://huggingface.co';
 const MODEL_ID = 'Xenova/m2m100_418M';
 
 class TranslationWorkerPool {
@@ -29,11 +30,11 @@ class TranslationWorkerPool {
       this._workers.push(worker);
     }
 
-    env.remoteHost = HF_MIRROR;
+    env.remoteHost = HUB_HOST;
 
     // Load model on first worker (downloads + loads)
     onProgress(10, 'Downloading M2M100-418M...');
-    const result = await this._sendTo(0, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 300000);
+    const result = await this._sendTo(0, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HUB_HOST }, 300000);
     if (!result || !result.success) {
       const errMsg = result?.error || 'Unknown error';
       this._errorDetail = `Graph optimization: ${errMsg}`;
@@ -47,8 +48,15 @@ class TranslationWorkerPool {
     for (let i = 1; i < this._workers.length; i++) {
       const pct = this._workerLoadPct(i);
       onProgress(pct, `Loading cache (worker ${i + 1})...`);
-      await this._sendTo(i, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 300000);
+      await this._sendTo(i, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HUB_HOST }, 300000);
     }
+
+    // Mark as cached in IndexedDB
+    await Cache.setModelConfig('m2m100_418M', {
+      version: '1',
+      modelType: 'm2m100',
+      cachedAt: Date.now(),
+    });
 
     this._ready = true;
     const workerCount = this._workers.length;
@@ -185,7 +193,7 @@ class TranslationWorkerPool {
     }
     // Load model on all workers sequentially
     for (let wi = 0; wi < numWorkers; wi++) {
-      await this._sendTo(wi, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 120000);
+      await this._sendTo(wi, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HUB_HOST }, 120000);
       console.log(`[batchTranslate] w${wi} model reloaded`);
     }
 
@@ -202,7 +210,7 @@ class TranslationWorkerPool {
               const freshWorker = new Worker(workerUrl, { type: 'module' });
               this._setupWorker(freshWorker, workerIdx);
               this._workers[workerIdx] = freshWorker;
-              await this._sendTo(workerIdx, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 120000);
+              await this._sendTo(workerIdx, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HUB_HOST }, 120000);
             }
             chain.callsSinceRecreate = 0;
           }
@@ -238,7 +246,7 @@ class TranslationWorkerPool {
                   const freshWorker = new Worker(workerUrl, { type: 'module' });
                   this._setupWorker(freshWorker, workerIdx);
                   this._workers[workerIdx] = freshWorker;
-                  await this._sendTo(workerIdx, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HF_MIRROR }, 120000);
+                  await this._sendTo(workerIdx, 'load', { wasmPaths, modelId: MODEL_ID, remoteHost: HUB_HOST }, 120000);
                   chain.callsSinceRecreate = 0;
                 } catch (loadErr) {
                   console.error(`[batchTranslate] w${workerIdx} reload failed:`, loadErr?.message);
@@ -461,7 +469,7 @@ class Translator {
 
     if (enginePreference === 'm2m100' || enginePreference === 'auto') {
       onProgress(5, 'Setting up workers...');
-      env.remoteHost = HF_MIRROR;
+      env.remoteHost = HUB_HOST;
 
       this._workerPool = new TranslationWorkerPool();
       try {

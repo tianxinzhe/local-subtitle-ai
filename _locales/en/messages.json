@@ -300,10 +300,10 @@
     "message": "Translation Engines"
   },
   "tab_setup": {
-    "message": "Setup"
+    "message": "Workbench"
   },
   "tab_subtitles": {
-    "message": "Subtitles"
+    "message": "Settings"
   },
   "label_engine": {
     "message": "Engine"
@@ -322,5 +322,41 @@
   },
   "btn_reactivate_ai": {
     "message": "Re-activate"
+  },
+  "setting_model_cache": {
+    "message": "Local Model Cache"
+  },
+  "model_cache_status_cached": {
+    "message": "Downloaded"
+  },
+  "model_cache_status_not_cached": {
+    "message": "Not downloaded"
+  },
+  "model_cache_clear_all": {
+    "message": "Clear All Cache"
+  },
+  "model_cache_clear_confirm": {
+    "message": "Clear all downloaded models? This cannot be undone."
+  },
+  "model_cache_cleared": {
+    "message": "Cache cleared"
+  },
+  "model_cache_total": {
+    "message": "Total: {{size}}"
+  },
+  "model_cache_m2m100": {
+    "message": "M2M100-418M (Translation)"
+  },
+  "prompt_none": {
+    "message": "None"
+  },
+  "prompt_new_name": {
+    "message": "Context name..."
+  },
+  "prompt_new_text": {
+    "message": "Transcription context (domain terms, proper nouns)..."
+  },
+  "prompt_add": {
+    "message": "Add"
   }
 }

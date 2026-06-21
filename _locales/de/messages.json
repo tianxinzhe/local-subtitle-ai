@@ -213,10 +213,10 @@
     "message": "Beste Genauigkeit, langsamste"
   },
   "tab_setup": {
-    "message": "Einrichtung"
+    "message": "Arbeitsbereich"
   },
   "tab_subtitles": {
-    "message": "Untertitel"
+    "message": "Einstellungen"
   },
   "label_engine": {
     "message": "Engine"
@@ -235,5 +235,41 @@
   },
   "btn_reactivate_ai": {
     "message": "Neu aktivieren"
+  },
+  "setting_model_cache": {
+    "message": "Lokaler Modell-Cache"
+  },
+  "model_cache_status_cached": {
+    "message": "Heruntergeladen"
+  },
+  "model_cache_status_not_cached": {
+    "message": "Nicht heruntergeladen"
+  },
+  "model_cache_clear_all": {
+    "message": "Gesamten Cache leeren"
+  },
+  "model_cache_clear_confirm": {
+    "message": "Alle heruntergeladenen Modelle löschen? Dies kann nicht rückgängig gemacht werden."
+  },
+  "model_cache_cleared": {
+    "message": "Cache geleert"
+  },
+  "model_cache_total": {
+    "message": "Gesamt: {{size}}"
+  },
+  "model_cache_m2m100": {
+    "message": "M2M100-418M (Übersetzung)"
+  },
+  "prompt_none": {
+    "message": "None"
+  },
+  "prompt_new_name": {
+    "message": "Kontextname..."
+  },
+  "prompt_new_text": {
+    "message": "Transkriptionskontext (Domainbegriffe, Eigennamen)..."
+  },
+  "prompt_add": {
+    "message": "Hinzufügen"
   }
 }

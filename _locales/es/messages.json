@@ -213,10 +213,10 @@
     "message": "Mejor precisión, más lento"
   },
   "tab_setup": {
-    "message": "Configuración"
+    "message": "Banco de trabajo"
   },
   "tab_subtitles": {
-    "message": "Subtítulos"
+    "message": "Ajustes"
   },
   "label_engine": {
     "message": "Motor"
@@ -235,5 +235,41 @@
   },
   "btn_reactivate_ai": {
     "message": "Reactivar"
+  },
+  "setting_model_cache": {
+    "message": "Caché local de modelos"
+  },
+  "model_cache_status_cached": {
+    "message": "Descargado"
+  },
+  "model_cache_status_not_cached": {
+    "message": "No descargado"
+  },
+  "model_cache_clear_all": {
+    "message": "Borrar toda la caché"
+  },
+  "model_cache_clear_confirm": {
+    "message": "¿Borrar todos los modelos descargados? Esta acción no se puede deshacer."
+  },
+  "model_cache_cleared": {
+    "message": "Caché borrada"
+  },
+  "model_cache_total": {
+    "message": "Total: {{size}}"
+  },
+  "model_cache_m2m100": {
+    "message": "M2M100-418M (Traducción)"
+  },
+  "prompt_none": {
+    "message": "None"
+  },
+  "prompt_new_name": {
+    "message": "Nombre de contexto..."
+  },
+  "prompt_new_text": {
+    "message": "Contexto de transcripción (términos del dominio, nombres propios)..."
+  },
+  "prompt_add": {
+    "message": "Añadir"
   }
 }

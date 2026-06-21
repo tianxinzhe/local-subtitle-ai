@@ -192,7 +192,7 @@
     "message": "提取音频"
   },
   "btn_transcribe": {
-    "message": "语音转文字"
+    "message": "音转文字"
   },
   "btn_translate": {
     "message": "翻译"
@@ -300,10 +300,10 @@
     "message": "翻译引擎"
   },
   "tab_setup": {
-    "message": "设置"
+    "message": "工作台"
   },
   "tab_subtitles": {
-    "message": "字幕"
+    "message": "设置"
   },
   "label_engine": {
     "message": "翻译引擎"
@@ -322,5 +322,41 @@
   },
   "btn_reactivate_ai": {
     "message": "重新激活"
+  },
+  "setting_model_cache": {
+    "message": "本地模型缓存"
+  },
+  "model_cache_status_cached": {
+    "message": "已下载"
+  },
+  "model_cache_status_not_cached": {
+    "message": "未下载"
+  },
+  "model_cache_clear_all": {
+    "message": "清除全部缓存"
+  },
+  "model_cache_clear_confirm": {
+    "message": "清除所有已下载的模型？此操作不可撤销。"
+  },
+  "model_cache_cleared": {
+    "message": "缓存已清除"
+  },
+  "model_cache_total": {
+    "message": "总计：{{size}}"
+  },
+  "model_cache_m2m100": {
+    "message": "M2M100-418M（翻译）"
+  },
+  "prompt_none": {
+    "message": "无"
+  },
+  "prompt_new_name": {
+    "message": "上下文名称..."
+  },
+  "prompt_new_text": {
+    "message": "转写参考文本（领域术语、专有名词）..."
+  },
+  "prompt_add": {
+    "message": "添加"
   }
 }

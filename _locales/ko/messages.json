@@ -213,10 +213,10 @@
     "message": "최고 정확도, 가장 느림"
   },
   "tab_setup": {
-    "message": "설정"
+    "message": "작업 공간"
   },
   "tab_subtitles": {
-    "message": "자막"
+    "message": "설정"
   },
   "label_engine": {
     "message": "엔진"
@@ -235,5 +235,41 @@
   },
   "btn_reactivate_ai": {
     "message": "다시 활성화"
+  },
+  "setting_model_cache": {
+    "message": "로컬 모델 캐시"
+  },
+  "model_cache_status_cached": {
+    "message": "다운로드됨"
+  },
+  "model_cache_status_not_cached": {
+    "message": "다운로드 안 됨"
+  },
+  "model_cache_clear_all": {
+    "message": "모든 캐시 삭제"
+  },
+  "model_cache_clear_confirm": {
+    "message": "다운로드된 모든 모델을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+  },
+  "model_cache_cleared": {
+    "message": "캐시 삭제됨"
+  },
+  "model_cache_total": {
+    "message": "총: {{size}}"
+  },
+  "model_cache_m2m100": {
+    "message": "M2M100-418M (번역)"
+  },
+  "prompt_none": {
+    "message": "None"
+  },
+  "prompt_new_name": {
+    "message": "컨텍스트 이름..."
+  },
+  "prompt_new_text": {
+    "message": "전사 컨텍스트 (도메인 용어, 고유 명사)..."
+  },
+  "prompt_add": {
+    "message": "추가"
   }
 }

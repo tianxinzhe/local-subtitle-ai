@@ -67,11 +67,15 @@ export async function removeModelItem(key) {
 export async function clearModelCache() {
   const database = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = database.transaction(MODEL_STORE, 'readwrite');
-    const store = tx.objectStore(MODEL_STORE);
-    const request = store.clear();
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    const tx = database.transaction([MODEL_STORE, CONFIG_STORE], 'readwrite');
+    const s1 = tx.objectStore(MODEL_STORE).clear();
+    const s2 = tx.objectStore(CONFIG_STORE).clear();
+    let done = 0;
+    const check = () => { if (++done === 2) resolve(); };
+    s1.onsuccess = check;
+    s1.onerror = () => reject(s1.error);
+    s2.onsuccess = check;
+    s2.onerror = () => reject(s2.error);
   });
 }
 

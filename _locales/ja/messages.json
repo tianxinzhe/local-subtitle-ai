@@ -213,10 +213,10 @@
     "message": "最高精度、最遅"
   },
   "tab_setup": {
-    "message": "セットアップ"
+    "message": "ワークベンチ"
   },
   "tab_subtitles": {
-    "message": "字幕"
+    "message": "設定"
   },
   "label_engine": {
     "message": "エンジン"
@@ -235,5 +235,41 @@
   },
   "btn_reactivate_ai": {
     "message": "再起動"
+  },
+  "setting_model_cache": {
+    "message": "ローカルモデルキャッシュ"
+  },
+  "model_cache_status_cached": {
+    "message": "ダウンロード済み"
+  },
+  "model_cache_status_not_cached": {
+    "message": "未ダウンロード"
+  },
+  "model_cache_clear_all": {
+    "message": "キャッシュをすべて削除"
+  },
+  "model_cache_clear_confirm": {
+    "message": "ダウンロード済みのモデルをすべて削除しますか？この操作は元に戻せません。"
+  },
+  "model_cache_cleared": {
+    "message": "キャッシュを削除しました"
+  },
+  "model_cache_total": {
+    "message": "合計：{{size}}"
+  },
+  "model_cache_m2m100": {
+    "message": "M2M100-418M（翻訳）"
+  },
+  "prompt_none": {
+    "message": "None"
+  },
+  "prompt_new_name": {
+    "message": "コンテキスト名..."
+  },
+  "prompt_new_text": {
+    "message": "文字起こしコンテキスト（ドメイン用語、固有名詞）..."
+  },
+  "prompt_add": {
+    "message": "追加"
   }
 }

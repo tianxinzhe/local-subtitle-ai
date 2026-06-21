@@ -213,10 +213,10 @@
     "message": "Лучшая точность, самый медленный"
   },
   "tab_setup": {
-    "message": "Настройка"
+    "message": "Рабочая область"
   },
   "tab_subtitles": {
-    "message": "Субтитры"
+    "message": "Настройки"
   },
   "label_engine": {
     "message": "Движок"
@@ -235,5 +235,41 @@
   },
   "btn_reactivate_ai": {
     "message": "Перезапустить"
+  },
+  "setting_model_cache": {
+    "message": "Локальный кэш моделей"
+  },
+  "model_cache_status_cached": {
+    "message": "Загружено"
+  },
+  "model_cache_status_not_cached": {
+    "message": "Не загружено"
+  },
+  "model_cache_clear_all": {
+    "message": "Очистить весь кэш"
+  },
+  "model_cache_clear_confirm": {
+    "message": "Удалить все загруженные модели? Это действие необратимо."
+  },
+  "model_cache_cleared": {
+    "message": "Кэш очищен"
+  },
+  "model_cache_total": {
+    "message": "Всего: {{size}}"
+  },
+  "model_cache_m2m100": {
+    "message": "M2M100-418M (перевод)"
+  },
+  "prompt_none": {
+    "message": "None"
+  },
+  "prompt_new_name": {
+    "message": "Название контекста..."
+  },
+  "prompt_new_text": {
+    "message": "Контекст транскрипции (доменные термины, имена собственные)..."
+  },
+  "prompt_add": {
+    "message": "Добавить"
   }
 }

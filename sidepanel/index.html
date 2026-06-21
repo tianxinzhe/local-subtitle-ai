@@ -65,9 +65,7 @@
         </button>
 
         <div id="progressContainer" class="hidden">
-          <div id="progressBar">
-            <div id="progressFill"></div>
-          </div>
+          <div id="workerProgressList"></div>
           <span id="progressLabel">0%</span>
         </div>
 
@@ -84,24 +82,16 @@
           </div>
         </div>
 
-        <div class="prompt-section">
+          <div class="prompt-section">
           <div class="prompt-toggle" id="promptToggle">
             <span data-i18n="prompt_section_title">Transcription Context (Whisper hint)</span>
             <span class="prompt-arrow">▸</span>
           </div>
           <div class="prompt-body hidden" id="promptBody">
             <div class="prompt-presets">
-              <label data-i18n="prompt_preset_label">Preset:</label>
+              <label data-i18n="prompt_preset_label">Select:</label>
               <select id="promptPreset">
-                <option value="general" data-i18n="prompt_preset_general">General</option>
-                <option value="tech" data-i18n="prompt_preset_tech">Tech / Programming</option>
-                <option value="medical" data-i18n="prompt_preset_medical">Medical / Healthcare</option>
-                <option value="legal" data-i18n="prompt_preset_legal">Legal / Court</option>
-                <option value="finance" data-i18n="prompt_preset_finance">Finance / Business</option>
-                <option value="education" data-i18n="prompt_preset_education">Education / Lecture</option>
-                <option value="interview" data-i18n="prompt_preset_interview">Interview / Podcast</option>
-                <option value="gaming" data-i18n="prompt_preset_gaming">Gaming / Entertainment</option>
-                <option value="custom" data-i18n="prompt_preset_custom">Custom</option>
+                <option value="">None</option>
               </select>
             </div>
             <textarea id="promptCustom" data-i18n-placeholder="prompt_placeholder" placeholder="e.g. Speaker: 张三, 李四. Topics: 量子计算, Transformer, LLM."></textarea>
@@ -160,25 +150,6 @@
           </div>
         </div>
       </section>
-    </div>
-
-    <!-- ═══ Subtitles Tab ═══ -->
-    <div id="tabSubtitles" class="tab-content">
-      <div id="settingsInline" class="settings-inline">
-        <div class="setting-row">
-          <label for="settingUiLang" data-i18n="label_ui_lang">Interface Language</label>
-          <select id="settingUiLang">
-            <option value="en">English</option>
-            <option value="zh">中文</option>
-            <option value="ja">日本語</option>
-            <option value="ko">한국어</option>
-            <option value="fr">Français</option>
-            <option value="de">Deutsch</option>
-            <option value="es">Español</option>
-            <option value="ru">Русский</option>
-          </select>
-        </div>
-      </div>
 
       <div id="subtitleSection">
         <div class="section-header">
@@ -191,6 +162,38 @@
         </div>
         <div id="subtitleList">
           <div id="emptyState" class="empty-state" data-i18n="label_no_subtitles">No subtitles yet</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Settings Tab ═══ -->
+    <div id="tabSubtitles" class="tab-content">
+      <div class="settings-section">
+        <div class="settings-toggle" data-target="modelCacheBody">
+          <span data-i18n="setting_model_cache">Local Model Cache</span>
+          <span class="prompt-arrow">▸</span>
+        </div>
+        <div id="modelCacheBody" class="settings-body">
+          <div id="modelCacheList" class="model-cache-list"></div>
+          <div class="cache-footer">
+            <span id="modelCacheTotal" class="cache-total"></span>
+            <button id="clearModelCacheBtn" class="danger-btn" data-i18n="model_cache_clear_all">Clear All Cache</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-toggle" data-target="promptBody">
+          <span data-i18n="prompt_section_title">Transcription Context (Whisper hint)</span>
+          <span class="prompt-arrow">▸</span>
+        </div>
+        <div id="promptBody" class="settings-body">
+          <div id="promptList" class="prompt-list"></div>
+          <div class="prompt-add-bar">
+            <input type="text" id="promptNewName" data-i18n-placeholder="prompt_new_name" placeholder="Context name...">
+            <textarea id="promptNewText" data-i18n-placeholder="prompt_new_text" placeholder="Transcription context (domain terms, proper nouns)..."></textarea>
+            <button id="promptAddBtn" class="primary-btn small-btn" data-i18n="prompt_add">Add</button>
+          </div>
         </div>
       </div>
     </div>
