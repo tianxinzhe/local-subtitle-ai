@@ -217,6 +217,9 @@ async function populateLanguageDropdowns() {
   const languages = getAllLanguages();
   const uiLang = i18n.getCurrentLanguage();
 
+  const prevSource = sourceSelect.value;
+  const prevTarget = targetSelect.value;
+
   targetSelect.innerHTML = '';
   for (const lang of languages) {
     const opt = document.createElement('option');
@@ -232,6 +235,10 @@ async function populateLanguageDropdowns() {
     opt.textContent = lang.name[uiLang] || lang.name.en;
     sourceSelect.appendChild(opt);
   }
+
+  const config = await loadConfig();
+  sourceSelect.value = prevSource || config.sourceLanguage || 'auto';
+  targetSelect.value = prevTarget || config.targetLanguage || 'zh';
 }
 
 function updateLangToggle() {
@@ -485,6 +492,7 @@ function setupEventListeners() {
     await i18n.setLanguage(lang);
     localizeHtml();
     await populateLanguageDropdowns();
+    await loadSettings();
   });
 
   $('fileInput').addEventListener('change', (e) => {
