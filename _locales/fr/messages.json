@@ -222,7 +222,7 @@
     "message": "Moteur"
   },
   "engine_auto": {
-    "message": "Auto"
+    "message": "Auto (Recommandé)"
   },
   "engine_gemini": {
     "message": "Gemini Nano"
@@ -261,7 +261,7 @@
     "message": "M2M100-418M (Traduction)"
   },
   "prompt_none": {
-    "message": "None"
+    "message": "Aucun"
   },
   "prompt_new_name": {
     "message": "Nom du contexte..."
@@ -277,5 +277,26 @@
   },
   "label_log_empty": {
     "message": "Aucune activité pour l'instant"
+  },
+  "prompt_section_title": {
+    "message": "Contexte de transcription (indice Whisper)"
+  },
+  "prompt_preset_label": {
+    "message": "Présélection :"
+  },
+  "prompt_placeholder": {
+    "message": "ex. : Intervenant : Jean Dupont, Marie. Sujets : informatique quantique, Transformer, LLM."
+  },
+  "prompt_hint": {
+    "message": "Ce texte est fourni à Whisper comme contexte initial pour orienter la reconnaissance vers la terminologie du domaine, les noms propres et le style d'élocution."
+  },
+  "btn_extract_audio": {
+    "message": "Extraire l'audio"
+  },
+  "btn_transcribe": {
+    "message": "Transcrire"
+  },
+  "btn_translate": {
+    "message": "Traduire"
   }
 }

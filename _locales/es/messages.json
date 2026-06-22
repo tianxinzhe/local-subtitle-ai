@@ -222,7 +222,7 @@
     "message": "Motor"
   },
   "engine_auto": {
-    "message": "Auto"
+    "message": "Auto (Recomendado)"
   },
   "engine_gemini": {
     "message": "Gemini Nano"
@@ -261,7 +261,7 @@
     "message": "M2M100-418M (Traducción)"
   },
   "prompt_none": {
-    "message": "None"
+    "message": "Ninguno"
   },
   "prompt_new_name": {
     "message": "Nombre de contexto..."
@@ -277,5 +277,26 @@
   },
   "label_log_empty": {
     "message": "Sin actividad aún"
+  },
+  "prompt_section_title": {
+    "message": "Contexto de transcripción (pista para Whisper)"
+  },
+  "prompt_preset_label": {
+    "message": "Predefinido:"
+  },
+  "prompt_placeholder": {
+    "message": "ej. Orador: Juan Pérez, María. Temas: computación cuántica, Transformer, LLM."
+  },
+  "prompt_hint": {
+    "message": "Este texto se proporciona a Whisper como contexto inicial para orientar el reconocimiento hacia terminología del dominio, nombres propios y estilo de habla."
+  },
+  "btn_extract_audio": {
+    "message": "Extraer audio"
+  },
+  "btn_transcribe": {
+    "message": "Transcribir"
+  },
+  "btn_translate": {
+    "message": "Traducir"
   }
 }

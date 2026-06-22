@@ -192,7 +192,7 @@
     "message": "提取音频"
   },
   "btn_transcribe": {
-    "message": "音转文字"
+    "message": "转录"
   },
   "btn_translate": {
     "message": "翻译"

@@ -222,7 +222,7 @@
     "message": "エンジン"
   },
   "engine_auto": {
-    "message": "自動"
+    "message": "自動（推奨）"
   },
   "engine_gemini": {
     "message": "Gemini Nano"
@@ -234,7 +234,7 @@
     "message": "実行"
   },
   "btn_reactivate_ai": {
-    "message": "再起動"
+    "message": "再アクティブ化"
   },
   "setting_model_cache": {
     "message": "ローカルモデルキャッシュ"
@@ -261,7 +261,7 @@
     "message": "M2M100-418M（翻訳）"
   },
   "prompt_none": {
-    "message": "None"
+    "message": "なし"
   },
   "prompt_new_name": {
     "message": "コンテキスト名..."
@@ -277,5 +277,26 @@
   },
   "label_log_empty": {
     "message": "まだアクティビティはありません"
+  },
+  "prompt_section_title": {
+    "message": "文字起こしコンテキスト (Whisper ヒント)"
+  },
+  "prompt_preset_label": {
+    "message": "プリセット:"
+  },
+  "prompt_placeholder": {
+    "message": "例: 話者: 山田太郎, 鈴木. トピック: 量子コンピューティング, Transformer, LLM."
+  },
+  "prompt_hint": {
+    "message": "このテキストはWhisperの初期コンテキストとして、専門用語、固有名詞、話し方のスタイルへの認識をバイアスします。"
+  },
+  "btn_extract_audio": {
+    "message": "音声抽出"
+  },
+  "btn_transcribe": {
+    "message": "文字起こし"
+  },
+  "btn_translate": {
+    "message": "翻訳"
   }
 }

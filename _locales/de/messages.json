@@ -222,7 +222,7 @@
     "message": "Engine"
   },
   "engine_auto": {
-    "message": "Auto"
+    "message": "Auto (Empfohlen)"
   },
   "engine_gemini": {
     "message": "Gemini Nano"
@@ -261,7 +261,7 @@
     "message": "M2M100-418M (Übersetzung)"
   },
   "prompt_none": {
-    "message": "None"
+    "message": "Keine"
   },
   "prompt_new_name": {
     "message": "Kontextname..."
@@ -277,5 +277,26 @@
   },
   "label_log_empty": {
     "message": "Noch keine Aktivität"
+  },
+  "prompt_section_title": {
+    "message": "Transkriptionskontext (Whisper-Hinweis)"
+  },
+  "prompt_preset_label": {
+    "message": "Voreinstellung:"
+  },
+  "prompt_placeholder": {
+    "message": "z.B. Sprecher: Max Mustermann, Maria. Themen: Quantencomputing, Transformer, LLM."
+  },
+  "prompt_hint": {
+    "message": "Dieser Text wird Whisper als Ausgangskontext bereitgestellt, um die Erkennung in Richtung Fachbegriffe, Eigennamen und Sprechstil zu lenken."
+  },
+  "btn_extract_audio": {
+    "message": "Audio extrahieren"
+  },
+  "btn_transcribe": {
+    "message": "Transkribieren"
+  },
+  "btn_translate": {
+    "message": "Übersetzen"
   }
 }

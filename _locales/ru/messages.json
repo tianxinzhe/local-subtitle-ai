@@ -222,7 +222,7 @@
     "message": "Движок"
   },
   "engine_auto": {
-    "message": "Авто"
+    "message": "Авто (рекомендуется)"
   },
   "engine_gemini": {
     "message": "Gemini Nano"
@@ -261,7 +261,7 @@
     "message": "M2M100-418M (перевод)"
   },
   "prompt_none": {
-    "message": "None"
+    "message": "Нет"
   },
   "prompt_new_name": {
     "message": "Название контекста..."
@@ -277,5 +277,26 @@
   },
   "label_log_empty": {
     "message": "Пока нет активности"
+  },
+  "prompt_section_title": {
+    "message": "Контекст транскрипции (подсказка Whisper)"
+  },
+  "prompt_preset_label": {
+    "message": "Пресет:"
+  },
+  "prompt_placeholder": {
+    "message": "напр. Диктор: Иван Петров, Анна. Темы: квантовые вычисления, Transformer, LLM."
+  },
+  "prompt_hint": {
+    "message": "Этот текст передаётся Whisper в качестве начального контекста для смещения распознавания в сторону доменной терминологии, имён собственных и стиля речи."
+  },
+  "btn_extract_audio": {
+    "message": "Извлечь аудио"
+  },
+  "btn_transcribe": {
+    "message": "Транскрибировать"
+  },
+  "btn_translate": {
+    "message": "Перевести"
   }
 }

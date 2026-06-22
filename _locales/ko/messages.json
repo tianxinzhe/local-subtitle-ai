@@ -222,7 +222,7 @@
     "message": "엔진"
   },
   "engine_auto": {
-    "message": "자동"
+    "message": "자동（권장）"
   },
   "engine_gemini": {
     "message": "Gemini Nano"
@@ -261,7 +261,7 @@
     "message": "M2M100-418M (번역)"
   },
   "prompt_none": {
-    "message": "None"
+    "message": "없음"
   },
   "prompt_new_name": {
     "message": "컨텍스트 이름..."
@@ -277,5 +277,26 @@
   },
   "label_log_empty": {
     "message": "아직 활동이 없습니다"
+  },
+  "prompt_section_title": {
+    "message": "전사 컨텍스트 (Whisper 힌트)"
+  },
+  "prompt_preset_label": {
+    "message": "프리셋:"
+  },
+  "prompt_placeholder": {
+    "message": "예: 화자: 홍길동, 이순신. 주제: 양자 컴퓨팅, Transformer, LLM."
+  },
+  "prompt_hint": {
+    "message": "이 텍스트는 Whisper 초기 컨텍스트로 제공되어 도메인 용어, 고유 명사, 말하기 스타일 인식을 개선합니다."
+  },
+  "btn_extract_audio": {
+    "message": "오디오 추출"
+  },
+  "btn_transcribe": {
+    "message": "전사"
+  },
+  "btn_translate": {
+    "message": "번역"
   }
 }
