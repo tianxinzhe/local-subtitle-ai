@@ -57,19 +57,19 @@
     "message": "Автоопределение"
   },
   "option_tiny_model": {
-    "message": "Whisper Tiny (75 МБ, Быстро)"
+    "message": "Whisper Tiny (85 МБ, Быстро)"
   },
   "option_base_model": {
-    "message": "Whisper Base (140 МБ, Точно)"
+    "message": "Whisper Base (80 МБ, Точно)"
   },
   "option_small_model": {
-    "message": "Whisper Small (460 МБ, Лучше)"
+    "message": "Whisper Small (250 МБ, Лучше)"
   },
   "option_medium_model": {
-    "message": "Whisper Medium (1.5 ГБ, Высокое качество)"
+    "message": "Whisper Medium (750 МБ, Высокое качество)"
   },
   "option_large_v3_model": {
-    "message": "Whisper Large v3 (2.9 ГБ, Лучшее качество)"
+    "message": "Whisper Large v3 (1.5 ГБ, Лучшее качество)"
   },
   "option_large_v3_turbo_model": {
     "message": "Whisper Turbo (1.6 ГБ, Быстро+Качество)"
@@ -271,5 +271,11 @@
   },
   "prompt_add": {
     "message": "Добавить"
+  },
+  "label_log": {
+    "message": "Журнал активности"
+  },
+  "label_log_empty": {
+    "message": "Пока нет активности"
   }
 }

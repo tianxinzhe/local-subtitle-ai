@@ -57,19 +57,19 @@
     "message": "自動検出"
   },
   "option_tiny_model": {
-    "message": "Whisper Tiny (75MB, 高速)"
+    "message": "Whisper Tiny (85MB, 高速)"
   },
   "option_base_model": {
-    "message": "Whisper Base (140MB, 高精度)"
+    "message": "Whisper Base (80MB, 高精度)"
   },
   "option_small_model": {
-    "message": "Whisper Small (460MB, 良好)"
+    "message": "Whisper Small (250MB, 良好)"
   },
   "option_medium_model": {
-    "message": "Whisper Medium (1.5GB, 高品質)"
+    "message": "Whisper Medium (750MB, 高品質)"
   },
   "option_large_v3_model": {
-    "message": "Whisper Large v3 (2.9GB, 最高品質)"
+    "message": "Whisper Large v3 (1.5GB, 最高品質)"
   },
   "option_large_v3_turbo_model": {
     "message": "Whisper Turbo (1.6GB, 高速+品質)"
@@ -271,5 +271,11 @@
   },
   "prompt_add": {
     "message": "追加"
+  },
+  "label_log": {
+    "message": "アクティビティログ"
+  },
+  "label_log_empty": {
+    "message": "まだアクティビティはありません"
   }
 }

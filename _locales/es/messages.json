@@ -57,19 +57,19 @@
     "message": "Detección automática"
   },
   "option_tiny_model": {
-    "message": "Whisper Tiny (75 MB, Rápido)"
+    "message": "Whisper Tiny (85 MB, Rápido)"
   },
   "option_base_model": {
-    "message": "Whisper Base (140 MB, Preciso)"
+    "message": "Whisper Base (80 MB, Preciso)"
   },
   "option_small_model": {
-    "message": "Whisper Small (460 MB, Mejor)"
+    "message": "Whisper Small (250 MB, Mejor)"
   },
   "option_medium_model": {
-    "message": "Whisper Medium (1.5 GB, Alta calidad)"
+    "message": "Whisper Medium (750 MB, Alta calidad)"
   },
   "option_large_v3_model": {
-    "message": "Whisper Large v3 (2.9 GB, Mejor calidad)"
+    "message": "Whisper Large v3 (1.5 GB, Mejor calidad)"
   },
   "option_large_v3_turbo_model": {
     "message": "Whisper Turbo (1.6 GB, Rápido+Calidad)"
@@ -271,5 +271,11 @@
   },
   "prompt_add": {
     "message": "Añadir"
+  },
+  "label_log": {
+    "message": "Registro de actividad"
+  },
+  "label_log_empty": {
+    "message": "Sin actividad aún"
   }
 }

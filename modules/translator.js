@@ -365,7 +365,7 @@ class GeminiEngine {
     console.log('[Gemini] ✗ 所有翻译 API 路径都失败');
     console.log('[Gemini] 请检查:');
     console.log('[Gemini]   1. chrome://flags/#prompt-api-for-gemini-nano = Enabled');
-    console.log('[Gemini]   2. chrome://components/ → Optimization Guide On Device Model 已下载');
+    console.log('[Gemini]   2. 重启 Chrome 后重试');
     return false;
   }
 

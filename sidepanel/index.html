@@ -37,11 +37,11 @@
           <div class="sel-row">
             <label for="asrModelSelect" data-i18n="label_asr_model">ASR Model</label>
             <select id="asrModelSelect">
-              <option value="tiny" data-i18n="option_tiny_model">Whisper Tiny (75MB)</option>
-              <option value="base" data-i18n="option_base_model" selected>Whisper Base (140MB)</option>
-              <option value="small" data-i18n="option_small_model">Whisper Small (460MB)</option>
-              <option value="medium" data-i18n="option_medium_model">Whisper Medium (1.5GB)</option>
-              <option value="large-v3" data-i18n="option_large_v3_model">Whisper Large v3 (2.9GB)</option>
+              <option value="tiny" data-i18n="option_tiny_model">Whisper Tiny (85MB)</option>
+              <option value="base" data-i18n="option_base_model" selected>Whisper Base (80MB)</option>
+              <option value="small" data-i18n="option_small_model">Whisper Small (250MB)</option>
+              <option value="medium" data-i18n="option_medium_model">Whisper Medium (750MB)</option>
+              <option value="large-v3" data-i18n="option_large_v3_model">Whisper Large v3 (1.5GB)</option>
             </select>
             <span class="sel-status" id="whisperStatus">-</span>
           </div>
@@ -151,7 +151,14 @@
         </div>
       </section>
 
-      <div id="subtitleSection">
+      <div id="logContainer" class="log-container open">
+        <div id="logBody" class="log-body"><div class="log-empty" data-i18n="label_log_empty">No activity yet</div></div>
+      </div>
+    </div>
+
+    <!-- ═══ Subtitles Tab ═══ -->
+    <div id="tabSubtitles" class="tab-content">
+      <div id="subtitleSection" class="hidden">
         <div class="section-header">
           <h3 data-i18n="label_subtitles">Subtitles</h3>
           <span id="subtitleCount" class="count-badge">0</span>
@@ -164,16 +171,13 @@
           <div id="emptyState" class="empty-state" data-i18n="label_no_subtitles">No subtitles yet</div>
         </div>
       </div>
-    </div>
 
-    <!-- ═══ Settings Tab ═══ -->
-    <div id="tabSubtitles" class="tab-content">
       <div class="settings-section">
         <div class="settings-toggle" data-target="modelCacheBody">
           <span data-i18n="setting_model_cache">Local Model Cache</span>
           <span class="prompt-arrow">▸</span>
         </div>
-        <div id="modelCacheBody" class="settings-body">
+        <div id="modelCacheBody" class="settings-body hidden">
           <div id="modelCacheList" class="model-cache-list"></div>
           <div class="cache-footer">
             <span id="modelCacheTotal" class="cache-total"></span>
@@ -183,11 +187,11 @@
       </div>
 
       <div class="settings-section">
-        <div class="settings-toggle" data-target="promptBody">
+        <div class="settings-toggle" data-target="promptSettingsBody">
           <span data-i18n="prompt_section_title">Transcription Context (Whisper hint)</span>
           <span class="prompt-arrow">▸</span>
         </div>
-        <div id="promptBody" class="settings-body">
+        <div id="promptSettingsBody" class="settings-body hidden">
           <div id="promptList" class="prompt-list"></div>
           <div class="prompt-add-bar">
             <input type="text" id="promptNewName" data-i18n-placeholder="prompt_new_name" placeholder="Context name...">

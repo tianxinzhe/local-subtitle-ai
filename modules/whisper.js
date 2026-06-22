@@ -52,6 +52,7 @@ class WhisperEngine {
       }
 
       const fileProgress = new Map();
+      let lastReported = -1;
       this._pipeline = await hfPipeline('automatic-speech-recognition', modelId, {
         dtype: 'q8',
         session_options: {
@@ -60,20 +61,26 @@ class WhisperEngine {
         progress_callback: (progress) => {
           if (progress.status === 'progress' && progress.name) {
             fileProgress.set(progress.name, { loaded: progress.loaded, total: progress.total });
-            const totalFiles = fileProgress.size;
-            let completedCount = 0;
-            let isCurrentFileReady = false;
-            for (const [name, f] of fileProgress) {
-              if (f.total > 0 && f.loaded >= f.total) {
-                completedCount++;
-                if (name === progress.name) isCurrentFileReady = true;
+            let totalLoaded = 0;
+            let totalBytes = 0;
+            let hasLargeFile = false;
+            for (const [, f] of fileProgress) {
+              if (f.total >= 100 * 1024) {
+                hasLargeFile = true;
+                totalLoaded += f.loaded || 0;
+                totalBytes += f.total || 0;
               }
             }
-            const current = fileProgress.get(progress.name);
-            const currentPct = current.total > 0 ? (current.loaded / current.total) : 0;
-            const completedWeight = isCurrentFileReady ? completedCount : (completedCount + currentPct);
-            const pct = Math.min(100, Math.round((completedWeight / totalFiles) * 100));
-            onProgress(pct, 'downloading');
+            let pct;
+            if (!hasLargeFile) {
+              pct = Math.min(10, lastReported + 1);
+            } else {
+              pct = totalBytes > 0 ? Math.min(97, Math.round((totalLoaded / totalBytes) * 100)) : 0;
+            }
+            if (pct > lastReported) {
+              lastReported = pct;
+              onProgress(pct, 'downloading');
+            }
           } else if (progress.status === 'ready') {
             onProgress(100, 'ready');
           }
@@ -331,18 +338,22 @@ class WhisperWorkerEngine {
       if (type === 'loadProgress') {
         if (payload.status === 'progress' && payload.name) {
           fileProgress.set(payload.name, { loaded: payload.loaded, total: payload.total });
-          const totalFiles = fileProgress.size;
-          let completedCount = 0;
+          let totalLoaded = 0;
+          let totalBytes = 0;
+          let hasLargeFile = false;
           for (const [, f] of fileProgress) {
-            if (f.total > 0 && f.loaded >= f.total) completedCount++;
+            if (f.total >= 100 * 1024) {
+              hasLargeFile = true;
+              totalLoaded += f.loaded || 0;
+              totalBytes += f.total || 0;
+            }
           }
-          const current = fileProgress.get(payload.name);
-          const currentPct = current.total > 0 ? (current.loaded / current.total) : 0;
-          const isCurrentFileReady = current.loaded >= current.total;
-          const completedWeight = isCurrentFileReady ? completedCount : (completedCount + currentPct);
-          const pct = Math.min(100, Math.round((completedWeight / totalFiles) * 100));
-          
-          // 单调递增：只允许进度增加
+          let pct;
+          if (!hasLargeFile) {
+            pct = Math.min(10, lastReported + 1);
+          } else {
+            pct = totalBytes > 0 ? Math.min(97, Math.round((totalLoaded / totalBytes) * 100)) : 0;
+          }
           if (pct > lastReported) {
             lastReported = pct;
             onProgress(pct, 'downloading');
