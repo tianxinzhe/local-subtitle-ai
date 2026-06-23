@@ -374,7 +374,6 @@ class GeminiEngine {
       const ai = this._getAI();
       // 路径 1: self.ai.translator
       if (ai && ai.translator) {
-        if (this._translator) return true;
         try {
           this._translator = await ai.translator.create({ sourceLanguage: source, targetLanguage: target });
           return true;
@@ -387,7 +386,6 @@ class GeminiEngine {
       const T = (typeof self !== 'undefined' && self.Translator) 
              || (typeof window !== 'undefined' && window.Translator);
       if (T && typeof T.create === 'function') {
-        if (this._translator) return true;
         try {
           this._translator = await T.create({ sourceLanguage: source, targetLanguage: target });
           return true;
