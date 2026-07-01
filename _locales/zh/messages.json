@@ -96,19 +96,19 @@
     "message": "自动检测"
   },
   "option_tiny_model": {
-    "message": "Whisper Tiny (75MB, 更快)"
+    "message": "Whisper Tiny (85MB, 更快)"
   },
   "option_base_model": {
-    "message": "Whisper Base (140MB, 更准)"
+    "message": "Whisper Base (80MB, 更准)"
   },
   "option_small_model": {
-    "message": "Whisper Small (460MB, 更佳)"
+    "message": "Whisper Small (250MB, 更佳)"
   },
   "option_medium_model": {
-    "message": "Whisper Medium (1.5GB, 高质量)"
+    "message": "Whisper Medium (750MB, 高质量)"
   },
   "option_large_v3_model": {
-    "message": "Whisper Large v3 (2.9GB, 最佳质量)"
+    "message": "Whisper Large v3 (1.5GB, 最佳质量)"
   },
   "option_large_v3_turbo_model": {
     "message": "Whisper Turbo (1.6GB, 快速+质量)"
@@ -192,7 +192,7 @@
     "message": "提取音频"
   },
   "btn_transcribe": {
-    "message": "音转文字"
+    "message": "转录"
   },
   "btn_translate": {
     "message": "翻译"
@@ -358,5 +358,11 @@
   },
   "prompt_add": {
     "message": "添加"
+  },
+  "label_log": {
+    "message": "活动日志"
+  },
+  "label_log_empty": {
+    "message": "暂无活动"
   }
 }

@@ -114,6 +114,12 @@ async function executePipeline() {
   const doTranscribe = $('chkTranscribe').checked && !$('chkTranscribe').disabled;
   const doTranslate = $('chkTranslate').checked && !$('chkTranslate').disabled;
 
+  const steps = [];
+  if (doExtract) steps.push('Extract');
+  if (doTranscribe) steps.push('Transcribe');
+  if (doTranslate) steps.push('Translate');
+  addLog(`Pipeline started: ${steps.join(' → ')}`, 'info');
+
   for (const s of ['Extract', 'Transcribe', 'Translate']) {
     const show = (s === 'Extract' && doExtract) || (s === 'Transcribe' && doTranscribe) || (s === 'Translate' && doTranslate);
     $('si' + s).classList.toggle('hidden', !show);
@@ -127,16 +133,20 @@ async function executePipeline() {
   try {
     if (doExtract && currentFileType === 'video' && !audioData) {
       _currentStep = 'Extract';
+      addLog('Extracting audio from video...', 'info');
       await extractAudio(currentFile);
       setStepDone('Extract', true);
+      addLog('Audio extraction done', 'success');
     } else {
       $('siExtract').classList.add('hidden');
     }
 
     if (doTranscribe && audioData) {
       _currentStep = 'Transcribe';
+      addLog('Transcribing audio...', 'info');
       await transcribeAudio();
       setStepDone('Transcribe', true);
+      addLog(`Transcription done: ${srtExporter.getSegmentCount()} segments`, 'success');
     } else if (currentFileType === 'subtitle') {
       setStepDone('Transcribe', true);
     } else {
@@ -145,8 +155,10 @@ async function executePipeline() {
 
     if (doTranslate && srtExporter.getSegmentCount() > 0 && hasTranslator()) {
       _currentStep = 'Translate';
+      addLog('Translating subtitles...', 'info');
       await translateSubtitles();
       setStepDone('Translate', true);
+      addLog('Translation done', 'success');
     } else {
       $('siTranslate').classList.add('hidden');
     }
@@ -182,6 +194,19 @@ async function init() {
   setModeCardsEnabled(false);
 }
 
+function addLog(msg, type = 'info') {
+  const body = $('logBody');
+  if (!body) return;
+  const empty = body.querySelector('.log-empty');
+  if (empty) empty.remove();
+  const time = new Date().toLocaleTimeString();
+  const entry = document.createElement('div');
+  entry.className = `log-entry log-${type}`;
+  entry.innerHTML = `<span class="log-time">[${time}]</span><span class="log-msg">${msg}</span>`;
+  body.appendChild(entry);
+  body.scrollTop = body.scrollHeight;
+}
+
 async function populateEngineInfo() {
 }
 
@@ -191,6 +216,9 @@ async function populateLanguageDropdowns() {
 
   const languages = getAllLanguages();
   const uiLang = i18n.getCurrentLanguage();
+
+  const prevSource = sourceSelect.value;
+  const prevTarget = targetSelect.value;
 
   targetSelect.innerHTML = '';
   for (const lang of languages) {
@@ -207,6 +235,10 @@ async function populateLanguageDropdowns() {
     opt.textContent = lang.name[uiLang] || lang.name.en;
     sourceSelect.appendChild(opt);
   }
+
+  const config = await loadConfig();
+  sourceSelect.value = prevSource || config.sourceLanguage || 'auto';
+  targetSelect.value = prevTarget || config.targetLanguage || 'zh';
 }
 
 function updateLangToggle() {
@@ -460,6 +492,7 @@ function setupEventListeners() {
     await i18n.setLanguage(lang);
     localizeHtml();
     await populateLanguageDropdowns();
+    await loadSettings();
   });
 
   $('fileInput').addEventListener('change', (e) => {
@@ -551,9 +584,6 @@ function setupEventListeners() {
   document.querySelectorAll('.settings-toggle').forEach(el => {
     const body = document.getElementById(el.dataset.target);
     const section = el.parentElement;
-    // Start expanded
-    section.classList.add('open');
-    body.classList.remove('hidden');
     el.addEventListener('click', () => {
       body.classList.toggle('hidden');
       section.classList.toggle('open', !body.classList.contains('hidden'));
@@ -622,6 +652,8 @@ async function doActivate(model) {
   btn.disabled = true;
   progressContainer.classList.remove('hidden');
 
+  addLog(`Loading Whisper model: ${model}...`, 'info');
+
   let whisperOk = false, translatorOk = false;
 
   // Step 1: Load Whisper
@@ -666,10 +698,12 @@ async function doActivate(model) {
     whisperOk = true;
     whisperStatusEl.textContent = '✓ OK';
     whisperStatusEl.className = 'sel-status sel-ready';
+    addLog('Whisper model loaded', 'success');
   } catch (err) {
     whisperStatusEl.textContent = '✗ Failed';
     whisperStatusEl.className = 'sel-status sel-error';
     console.error('[SidePanel] Whisper load failed:', err);
+    addLog(`Whisper load failed: ${err.message}`, 'error');
   }
 
   // Clear worker bars before translator phase
@@ -683,6 +717,7 @@ async function doActivate(model) {
   let finalStage = '';
   const configForEngine = await loadConfig();
   const enginePref = configForEngine.translationEngine || 'auto';
+  addLog(`Loading translator (${enginePref})...`, 'info');
   try {
     // Show single progress bar for translator
     workerList.innerHTML = '<div class="worker-progress-row"><div class="worker-bar-wrap" style="flex:1;margin-left:0"><div class="worker-bar-fill" id="tlFill"></div></div></div>';
@@ -705,18 +740,28 @@ async function doActivate(model) {
     if (badge && badge.engine.includes('M2M100')) {
       const dts = badge.detail.includes('q8') ? 'q8' : badge.detail.includes('fp16') ? 'fp16' : 'fp32';
       translatorStatusEl.textContent = `✓ M2M100-418M ${dts} (${badge.engine.match(/\d+ workers/)?.[0] || '?'})`;
+      if (enginePref === 'gemini-nano') {
+        addLog('Gemini Nano not available', 'error');
+        addLog('To enable: chrome://flags/#prompt-api-for-gemini-nano → Enabled, restart Chrome', 'error');
+      } else {
+        addLog('Gemini Nano not available, using M2M100-418M', 'warn');
+        addLog('To enable: chrome://flags/#prompt-api-for-gemini-nano → Enabled, restart Chrome', 'warn');
+      }
     } else if (badge && badge.engine.includes('Gemini')) {
       translatorStatusEl.textContent = '✓ Gemini Nano ready';
+      addLog('Gemini Nano detected and ready', 'success');
     } else {
       translatorStatusEl.textContent = '✓ OK';
     }
     translatorStatusEl.className = 'sel-status sel-ready';
     populateEngineInfo();
+    addLog('Translator ready', 'success');
   } catch (err) {
     translatorStatusEl.textContent = '✗ Failed';
     translatorStatusEl.className = 'sel-status sel-error';
     console.error('[SidePanel] Translator load failed:', err);
     populateEngineInfo();
+    addLog(`Translator failed: ${err.message}`, 'error');
   }
 
   // Done

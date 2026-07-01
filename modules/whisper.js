@@ -18,6 +18,29 @@ const MODEL_VERSION = {
   'large-v3': '1.0.0',
 };
 
+const _modelSizeCache = new Map();
+
+async function fetchModelTotalSize(modelId) {
+  if (_modelSizeCache.has(modelId)) return _modelSizeCache.get(modelId);
+  try {
+    const resp = await fetch(`https://huggingface.co/api/models/${modelId}`);
+    if (!resp.ok) return 0;
+    const data = await resp.json();
+    const siblings = data.siblings || [];
+    let total = 0;
+    for (const sib of siblings) {
+      const name = sib.rfilename || '';
+      if (/\.(json|onnx|txt|tiktoken)$/.test(name)) {
+        total += sib.size || 0;
+      }
+    }
+    _modelSizeCache.set(modelId, total);
+    return total;
+  } catch {
+    return 0;
+  }
+}
+
 let pipeline = null;
 let modelType = null;
 
@@ -51,7 +74,10 @@ class WhisperEngine {
         onProgress(50, 'cached');
       }
 
+      const estimatedTotal = await fetchModelTotalSize(modelId) || 0;
+
       const fileProgress = new Map();
+      let lastReported = -1;
       this._pipeline = await hfPipeline('automatic-speech-recognition', modelId, {
         dtype: 'q8',
         session_options: {
@@ -60,20 +86,18 @@ class WhisperEngine {
         progress_callback: (progress) => {
           if (progress.status === 'progress' && progress.name) {
             fileProgress.set(progress.name, { loaded: progress.loaded, total: progress.total });
-            const totalFiles = fileProgress.size;
-            let completedCount = 0;
-            let isCurrentFileReady = false;
-            for (const [name, f] of fileProgress) {
-              if (f.total > 0 && f.loaded >= f.total) {
-                completedCount++;
-                if (name === progress.name) isCurrentFileReady = true;
-              }
+            let totalLoaded = 0;
+            let totalKnown = 0;
+            for (const [, f] of fileProgress) {
+              totalLoaded += f.loaded || 0;
+              totalKnown += f.total || 0;
             }
-            const current = fileProgress.get(progress.name);
-            const currentPct = current.total > 0 ? (current.loaded / current.total) : 0;
-            const completedWeight = isCurrentFileReady ? completedCount : (completedCount + currentPct);
-            const pct = Math.min(100, Math.round((completedWeight / totalFiles) * 100));
-            onProgress(pct, 'downloading');
+            const denominator = Math.max(totalKnown, estimatedTotal);
+            const pct = denominator > 0 ? Math.min(97, Math.round((totalLoaded / denominator) * 100)) : 0;
+            if (pct > lastReported) {
+              lastReported = pct;
+              onProgress(pct, 'downloading');
+            }
           } else if (progress.status === 'ready') {
             onProgress(100, 'ready');
           }
@@ -296,14 +320,16 @@ class WhisperWorkerEngine {
     const workerUrl = chrome.runtime.getURL('modules/whisper-worker.js');
     const wasmPaths = chrome.runtime.getURL('libs/');
 
+    const modelId = MODEL_REPO[model];
+    const estimatedTotal = await fetchModelTotalSize(modelId) || 0;
+
     const worker = new Worker(workerUrl, { type: 'module' });
     const idx = this._workers.length;
     this._workers.push(worker);
 
     const fileProgress = new Map();
-    let lastReported = -1; // 单调递增保护，初始化为 -1 允许 0% 通过
+    let lastReported = -1;
 
-    // Handle worker crash: reject all pending messages for this worker
     worker.onerror = (err) => {
       console.error(`[Whisper] Worker ${idx} crashed:`, err.message);
       for (const [msgId, pending] of this._pending) {
@@ -331,18 +357,14 @@ class WhisperWorkerEngine {
       if (type === 'loadProgress') {
         if (payload.status === 'progress' && payload.name) {
           fileProgress.set(payload.name, { loaded: payload.loaded, total: payload.total });
-          const totalFiles = fileProgress.size;
-          let completedCount = 0;
+          let totalLoaded = 0;
+          let totalKnown = 0;
           for (const [, f] of fileProgress) {
-            if (f.total > 0 && f.loaded >= f.total) completedCount++;
+            totalLoaded += f.loaded || 0;
+            totalKnown += f.total || 0;
           }
-          const current = fileProgress.get(payload.name);
-          const currentPct = current.total > 0 ? (current.loaded / current.total) : 0;
-          const isCurrentFileReady = current.loaded >= current.total;
-          const completedWeight = isCurrentFileReady ? completedCount : (completedCount + currentPct);
-          const pct = Math.min(100, Math.round((completedWeight / totalFiles) * 100));
-          
-          // 单调递增：只允许进度增加
+          const denominator = Math.max(totalKnown, estimatedTotal);
+          const pct = denominator > 0 ? Math.min(97, Math.round((totalLoaded / denominator) * 100)) : 0;
           if (pct > lastReported) {
             lastReported = pct;
             onProgress(pct, 'downloading');

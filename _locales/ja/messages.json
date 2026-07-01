@@ -57,19 +57,19 @@
     "message": "自動検出"
   },
   "option_tiny_model": {
-    "message": "Whisper Tiny (75MB, 高速)"
+    "message": "Whisper Tiny (85MB, 高速)"
   },
   "option_base_model": {
-    "message": "Whisper Base (140MB, 高精度)"
+    "message": "Whisper Base (80MB, 高精度)"
   },
   "option_small_model": {
-    "message": "Whisper Small (460MB, 良好)"
+    "message": "Whisper Small (250MB, 良好)"
   },
   "option_medium_model": {
-    "message": "Whisper Medium (1.5GB, 高品質)"
+    "message": "Whisper Medium (750MB, 高品質)"
   },
   "option_large_v3_model": {
-    "message": "Whisper Large v3 (2.9GB, 最高品質)"
+    "message": "Whisper Large v3 (1.5GB, 最高品質)"
   },
   "option_large_v3_turbo_model": {
     "message": "Whisper Turbo (1.6GB, 高速+品質)"
@@ -222,7 +222,7 @@
     "message": "エンジン"
   },
   "engine_auto": {
-    "message": "自動"
+    "message": "自動（推奨）"
   },
   "engine_gemini": {
     "message": "Gemini Nano"
@@ -234,7 +234,7 @@
     "message": "実行"
   },
   "btn_reactivate_ai": {
-    "message": "再起動"
+    "message": "再アクティブ化"
   },
   "setting_model_cache": {
     "message": "ローカルモデルキャッシュ"
@@ -261,7 +261,7 @@
     "message": "M2M100-418M（翻訳）"
   },
   "prompt_none": {
-    "message": "None"
+    "message": "なし"
   },
   "prompt_new_name": {
     "message": "コンテキスト名..."
@@ -272,25 +272,31 @@
   "prompt_add": {
     "message": "追加"
   },
-  "btn_extract_audio": {
-    "message": "Extract Audio"
+  "label_log": {
+    "message": "アクティビティログ"
   },
-  "btn_transcribe": {
-    "message": "Transcribe"
-  },
-  "btn_translate": {
-    "message": "Translate"
+  "label_log_empty": {
+    "message": "まだアクティビティはありません"
   },
   "prompt_section_title": {
-    "message": "Transcription Context (Whisper hint)"
+    "message": "文字起こしコンテキスト (Whisper ヒント)"
   },
   "prompt_preset_label": {
-    "message": "Preset:"
+    "message": "プリセット:"
   },
   "prompt_placeholder": {
-    "message": "e.g. Speaker: 张三, 李四. Topics: 量子计算, Transformer, LLM."
+    "message": "例: 話者: 山田太郎, 鈴木. トピック: 量子コンピューティング, Transformer, LLM."
   },
   "prompt_hint": {
-    "message": "This text is fed to Whisper as initial context to bias recognition toward domain terminology, proper nouns, and speaking style."
+    "message": "このテキストはWhisperの初期コンテキストとして、専門用語、固有名詞、話し方のスタイルへの認識をバイアスします。"
+  },
+  "btn_extract_audio": {
+    "message": "音声抽出"
+  },
+  "btn_transcribe": {
+    "message": "文字起こし"
+  },
+  "btn_translate": {
+    "message": "翻訳"
   }
 }

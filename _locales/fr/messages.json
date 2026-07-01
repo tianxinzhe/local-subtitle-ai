@@ -57,19 +57,19 @@
     "message": "Détection automatique"
   },
   "option_tiny_model": {
-    "message": "Whisper Tiny (75 Mo, Rapide)"
+    "message": "Whisper Tiny (85 Mo, Rapide)"
   },
   "option_base_model": {
-    "message": "Whisper Base (140 Mo, Précis)"
+    "message": "Whisper Base (80 Mo, Précis)"
   },
   "option_small_model": {
-    "message": "Whisper Small (460 Mo, Meilleur)"
+    "message": "Whisper Small (250 Mo, Meilleur)"
   },
   "option_medium_model": {
-    "message": "Whisper Medium (1.5 Go, Haute qualité)"
+    "message": "Whisper Medium (750 Mo, Haute qualité)"
   },
   "option_large_v3_model": {
-    "message": "Whisper Large v3 (2.9 Go, Meilleure qualité)"
+    "message": "Whisper Large v3 (1.5 Go, Meilleure qualité)"
   },
   "option_large_v3_turbo_model": {
     "message": "Whisper Turbo (1.6 Go, Rapide+Qualité)"
@@ -222,7 +222,7 @@
     "message": "Moteur"
   },
   "engine_auto": {
-    "message": "Auto"
+    "message": "Auto (Recommandé)"
   },
   "engine_gemini": {
     "message": "Gemini Nano"
@@ -261,7 +261,7 @@
     "message": "M2M100-418M (Traduction)"
   },
   "prompt_none": {
-    "message": "None"
+    "message": "Aucun"
   },
   "prompt_new_name": {
     "message": "Nom du contexte..."
@@ -272,25 +272,31 @@
   "prompt_add": {
     "message": "Ajouter"
   },
-  "btn_extract_audio": {
-    "message": "Extract Audio"
+  "label_log": {
+    "message": "Journal d'activité"
   },
-  "btn_transcribe": {
-    "message": "Transcribe"
-  },
-  "btn_translate": {
-    "message": "Translate"
+  "label_log_empty": {
+    "message": "Aucune activité pour l'instant"
   },
   "prompt_section_title": {
-    "message": "Transcription Context (Whisper hint)"
+    "message": "Contexte de transcription (indice Whisper)"
   },
   "prompt_preset_label": {
-    "message": "Preset:"
+    "message": "Présélection :"
   },
   "prompt_placeholder": {
-    "message": "e.g. Speaker: 张三, 李四. Topics: 量子计算, Transformer, LLM."
+    "message": "ex. : Intervenant : Jean Dupont, Marie. Sujets : informatique quantique, Transformer, LLM."
   },
   "prompt_hint": {
-    "message": "This text is fed to Whisper as initial context to bias recognition toward domain terminology, proper nouns, and speaking style."
+    "message": "Ce texte est fourni à Whisper comme contexte initial pour orienter la reconnaissance vers la terminologie du domaine, les noms propres et le style d'élocution."
+  },
+  "btn_extract_audio": {
+    "message": "Extraire l'audio"
+  },
+  "btn_transcribe": {
+    "message": "Transcrire"
+  },
+  "btn_translate": {
+    "message": "Traduire"
   }
 }

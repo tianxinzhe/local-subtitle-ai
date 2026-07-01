@@ -365,7 +365,7 @@ class GeminiEngine {
     console.log('[Gemini] ✗ 所有翻译 API 路径都失败');
     console.log('[Gemini] 请检查:');
     console.log('[Gemini]   1. chrome://flags/#prompt-api-for-gemini-nano = Enabled');
-    console.log('[Gemini]   2. chrome://components/ → Optimization Guide On Device Model 已下载');
+    console.log('[Gemini]   2. 重启 Chrome 后重试');
     return false;
   }
 
@@ -374,7 +374,6 @@ class GeminiEngine {
       const ai = this._getAI();
       // 路径 1: self.ai.translator
       if (ai && ai.translator) {
-        if (this._translator) return true;
         try {
           this._translator = await ai.translator.create({ sourceLanguage: source, targetLanguage: target });
           return true;
@@ -387,7 +386,6 @@ class GeminiEngine {
       const T = (typeof self !== 'undefined' && self.Translator) 
              || (typeof window !== 'undefined' && window.Translator);
       if (T && typeof T.create === 'function') {
-        if (this._translator) return true;
         try {
           this._translator = await T.create({ sourceLanguage: source, targetLanguage: target });
           return true;

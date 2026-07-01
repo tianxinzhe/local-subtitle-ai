@@ -57,19 +57,19 @@
     "message": "Автоопределение"
   },
   "option_tiny_model": {
-    "message": "Whisper Tiny (75 МБ, Быстро)"
+    "message": "Whisper Tiny (85 МБ, Быстро)"
   },
   "option_base_model": {
-    "message": "Whisper Base (140 МБ, Точно)"
+    "message": "Whisper Base (80 МБ, Точно)"
   },
   "option_small_model": {
-    "message": "Whisper Small (460 МБ, Лучше)"
+    "message": "Whisper Small (250 МБ, Лучше)"
   },
   "option_medium_model": {
-    "message": "Whisper Medium (1.5 ГБ, Высокое качество)"
+    "message": "Whisper Medium (750 МБ, Высокое качество)"
   },
   "option_large_v3_model": {
-    "message": "Whisper Large v3 (2.9 ГБ, Лучшее качество)"
+    "message": "Whisper Large v3 (1.5 ГБ, Лучшее качество)"
   },
   "option_large_v3_turbo_model": {
     "message": "Whisper Turbo (1.6 ГБ, Быстро+Качество)"
@@ -222,7 +222,7 @@
     "message": "Движок"
   },
   "engine_auto": {
-    "message": "Авто"
+    "message": "Авто (рекомендуется)"
   },
   "engine_gemini": {
     "message": "Gemini Nano"
@@ -261,7 +261,7 @@
     "message": "M2M100-418M (перевод)"
   },
   "prompt_none": {
-    "message": "None"
+    "message": "Нет"
   },
   "prompt_new_name": {
     "message": "Название контекста..."
@@ -272,25 +272,31 @@
   "prompt_add": {
     "message": "Добавить"
   },
-  "btn_extract_audio": {
-    "message": "Extract Audio"
+  "label_log": {
+    "message": "Журнал активности"
   },
-  "btn_transcribe": {
-    "message": "Transcribe"
-  },
-  "btn_translate": {
-    "message": "Translate"
+  "label_log_empty": {
+    "message": "Пока нет активности"
   },
   "prompt_section_title": {
-    "message": "Transcription Context (Whisper hint)"
+    "message": "Контекст транскрипции (подсказка Whisper)"
   },
   "prompt_preset_label": {
-    "message": "Preset:"
+    "message": "Пресет:"
   },
   "prompt_placeholder": {
-    "message": "e.g. Speaker: 张三, 李四. Topics: 量子计算, Transformer, LLM."
+    "message": "напр. Диктор: Иван Петров, Анна. Темы: квантовые вычисления, Transformer, LLM."
   },
   "prompt_hint": {
-    "message": "This text is fed to Whisper as initial context to bias recognition toward domain terminology, proper nouns, and speaking style."
+    "message": "Этот текст передаётся Whisper в качестве начального контекста для смещения распознавания в сторону доменной терминологии, имён собственных и стиля речи."
+  },
+  "btn_extract_audio": {
+    "message": "Извлечь аудио"
+  },
+  "btn_transcribe": {
+    "message": "Транскрибировать"
+  },
+  "btn_translate": {
+    "message": "Перевести"
   }
 }
